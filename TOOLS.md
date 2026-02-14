@@ -355,3 +355,227 @@ Table: syslog | Level: error | Records: 3
 
 === 3 entries returned ===
 ```
+
+---
+
+## lookup_app
+
+Search for ServiceNow applications (scoped apps) and platform plugins by name, scope namespace, or plugin ID. Returns sys_id, name, scope, version, active status, and type for each match.
+
+ServiceNow uses a hierarchical table structure for packages:
+- **sys_scope**: All scoped applications (base table)
+  - **sys_app**: Custom applications in development on this instance
+  - **sys_store_app**: Applications installed from the ServiceNow Store or company app repo
+- **sys_plugins**: Platform plugins
+
+Key use cases:
+- Find an application's sys_id to pass as the `scope` parameter to `execute_script` (to run scripts within that application's scope)
+- Check whether a specific app or plugin is installed/active on the instance
+- Look up version, scope namespace, and vendor info for any application or plugin
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `search_term` | string | **Yes** | — | Name, scope namespace (e.g., `"x_acme_my_app"`, `"sn_vul"`), or plugin ID (e.g., `"com.snc.vulnerability_response"`) to search for. Case-insensitive partial matching (contains). |
+| `type` | string | No | `"all"` | Filter search scope: `"app"` for scoped applications only, `"plugin"` for platform plugins only, `"all"` for both. |
+| `active_only` | boolean | No | `false` | When true, only returns active/installed applications and plugins. |
+
+### Example Usage
+
+```json
+{
+  "name": "lookup_app",
+  "arguments": {
+    "instance": "dev224436",
+    "search_term": "vulnerability",
+    "type": "all",
+    "active_only": true
+  }
+}
+```
+
+### Example Output
+
+```
+=== Application & Plugin Search Results ===
+Search: "vulnerability" | Type: all | Active only: yes
+Found: 3 result(s)
+
+--- Applications (1) ---
+
+1. Vulnerability Response
+   sys_id: abc123def456789
+   Scope: sn_vul
+   Version: 15.0.0
+   Type: Store App
+   Active: true
+   Vendor: ServiceNow
+   Description: Vulnerability Response helps you prioritize and remediate...
+
+--- Plugins (2) ---
+
+1. Vulnerability Response
+   sys_id: def456abc789012
+   Plugin ID: com.snc.vulnerability_response
+   Version: 15.0.0
+   Active: true
+
+2. Vulnerability Response - Connector Support
+   sys_id: ghi789def012345
+   Plugin ID: com.snc.vulnerability_response.connectors
+   Version: 15.0.0
+   Active: true
+
+=== 3 result(s) found ===
+
+Tip: Use an application's sys_id as the `scope` parameter in execute_script to run scripts within that application's scope.
+```
+
+---
+
+## lookup_table
+
+Search for ServiceNow tables by name or label. Queries the `sys_db_object` table to find and validate table names.
+
+Use this tool to:
+- Verify a table name exists before using it with `query_table` or in GlideRecord scripts
+- Discover the correct internal name for a table when you only know the display label
+- Find related tables (e.g., search `"incident"` to see incident, incident_task, etc.)
+- Check table hierarchy (which table a table extends)
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `search_term` | string | **Yes** | — | Table name or label to search for. Case-insensitive partial matching (contains). Examples: `"incident"`, `"cmdb_ci"`, `"Change Request"`. |
+| `limit` | number | No | `25` | Maximum number of results to return (1-100). |
+
+### Example Usage
+
+```json
+{
+  "name": "lookup_table",
+  "arguments": {
+    "instance": "dev224436",
+    "search_term": "incident",
+    "limit": 5
+  }
+}
+```
+
+### Example Output
+
+```
+=== Table Search Results ===
+Search: "incident"
+Found: 3 table(s)
+
+1. incident (Incident)
+   sys_id: b4211c11795632108bb291bde809c9e5
+   Extends: Task
+   Extendable: false
+   Number prefix: INC
+   Scope: Global
+
+2. incident_fact_table (Incident Fact Table)
+   sys_id: 0c7b0411791232108bb291bde809c915
+   Extendable: false
+   Scope: Global
+
+3. incident_task (Incident Task)
+   sys_id: f4211c11795632108bb291bde809c953
+   Extends: Task
+   Extendable: false
+   Scope: Global
+
+Tip: Use the table name (not label) with query_table or in GlideRecord scripts. Use lookup_columns to see the columns available on a table.
+```
+
+---
+
+## lookup_columns
+
+List or search columns (fields) on a ServiceNow table. Queries the `sys_dictionary` table to find column names, types, and metadata for a given table.
+
+Use this tool to:
+- List all columns on a table to see what fields are available
+- Validate a column name before using it in a query or script
+- Find the correct internal element name when you only know the display label
+- Check column types, whether a field is mandatory, read-only, or a reference
+
+> **Note:** Only columns defined directly on the specified table are returned. Inherited columns (e.g., `priority` on `incident`, which is defined on `task`) are not included. Query the parent table to see inherited fields.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `table` | string | **Yes** | — | The internal table name to look up columns for (e.g., `"incident"`, `"cmdb_ci_server"`, `"sys_user"`). Use `lookup_table` first if you are unsure of the exact table name. |
+| `search_term` | string | No | — | Optional filter to search columns by element name or label. Case-insensitive partial matching. If omitted, returns all columns on the table. |
+| `limit` | number | No | `50` | Maximum number of columns to return (1-200). |
+
+### Example Usage
+
+List all columns:
+
+```json
+{
+  "name": "lookup_columns",
+  "arguments": {
+    "instance": "dev224436",
+    "table": "incident"
+  }
+}
+```
+
+Search for specific columns:
+
+```json
+{
+  "name": "lookup_columns",
+  "arguments": {
+    "table": "incident",
+    "search_term": "caller",
+    "limit": 10
+  }
+}
+```
+
+### Example Output
+
+```
+=== Columns for table: incident ===
+Found: 5 column(s)
+
+1. business_impact (Business impact)
+   Type: String
+   Mandatory: false | Read-only: false | Active: true
+   Max length: 4,000
+
+2. business_stc (Business resolve time)
+   Type: Integer
+   Mandatory: false | Read-only: true | Active: true
+   Max length: 40
+
+3. caller_id (Caller)
+   Type: Reference -> User
+   Mandatory: false | Read-only: false | Active: true
+   Max length: 32
+   Default: javascript:incidentGetCaller();
+
+4. category (Category)
+   Type: String
+   Mandatory: false | Read-only: false | Active: true
+   Max length: 40
+   Default: inquiry
+
+5. cause (Cause)
+   Type: String
+   Mandatory: false | Read-only: false | Active: true
+   Max length: 4,000
+
+Tip: Use column element names (left of parentheses) in encoded queries, GlideRecord scripts, and the fields parameter of query_table.
+```
