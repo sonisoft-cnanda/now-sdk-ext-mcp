@@ -1,0 +1,11 @@
+{
+    "servers": {
+        "servicenow": {
+            "command": "node",
+            "args": ["/Users/cnanda/git/now-sdk-ext/now-sdk-ext-mcp/dist/index.js"],
+            "env": {
+              "SN_AUTH_ALIAS": "dev224436"
+            }
+          }
+    }
+  }
