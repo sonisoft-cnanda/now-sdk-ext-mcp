@@ -42,7 +42,7 @@
     "@servicenow/sdk-cli": "4.0.2",
     "@servicenow/sdk-cli-core": "3.0.2",
     "@servicenow/sdk-core": "4.0.2",
-    "@sonisoft/now-sdk-ext-core": "2.1.0",
+    "@sonisoft/now-sdk-ext-core": "2.2.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
