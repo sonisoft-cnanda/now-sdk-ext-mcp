@@ -25,7 +25,7 @@ npm run build
 This server uses the same credential store as the ServiceNow CLI (`snc`). If you haven't already, configure your instance credentials:
 
 ```bash
-snc configure --auth dev224436
+now-sdk auth --add <instance_alias>
 ```
 
 This stores credentials locally so the MCP server can authenticate without prompting.
