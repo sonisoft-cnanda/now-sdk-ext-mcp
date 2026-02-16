@@ -13,6 +13,12 @@ import { registerQuerySyslogTool } from "./tools/query-syslog.js";
 import { registerLookupAppTool } from "./tools/lookup-app.js";
 import { registerLookupTableTool } from "./tools/lookup-table.js";
 import { registerLookupColumnsTool } from "./tools/lookup-columns.js";
+import {
+  registerCodeSearchTool,
+  registerListCodeSearchGroupsTool,
+  registerListCodeSearchTablesTool,
+  registerAddCodeSearchTableTool,
+} from "./tools/codesearch.js";
 
 const server = new McpServer({
   name: "now-sdk-ext-mcp",
@@ -29,6 +35,10 @@ registerQuerySyslogTool(server);
 registerLookupAppTool(server);
 registerLookupTableTool(server);
 registerLookupColumnsTool(server);
+registerCodeSearchTool(server);
+registerListCodeSearchGroupsTool(server);
+registerListCodeSearchTablesTool(server);
+registerAddCodeSearchTableTool(server);
 
 // Prevent the process from crashing silently on unexpected errors.
 // Log to stderr (stdout is reserved for JSON-RPC).

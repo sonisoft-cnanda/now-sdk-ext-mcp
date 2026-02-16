@@ -107,6 +107,54 @@ export function createMockSyslogAppScopeRecords(count: number = 2) {
   }))
 }
 
+export function createMockCodeSearchResults(count: number = 2) {
+  return Array.from({ length: count }, (_, i) => ({
+    table: i === 0 ? 'sys_script_include' : 'sys_script',
+    tableLabel: i === 0 ? 'Script Include' : 'Business Rule',
+    name: `TestScript${i + 1}`,
+    field: 'script',
+    fieldLabel: 'Script',
+    lineMatches: [
+      { line: 10 + i * 5, context: `var gr = new GlideRecord("incident"); // match ${i + 1}` },
+      { line: 20 + i * 5, context: `gr.addQuery("active", true); // match ${i + 1}` },
+    ],
+    matchCount: 2,
+    firstMatchContext: `var gr = new GlideRecord("incident"); // match ${i + 1}`,
+    firstMatchLine: 10 + i * 5,
+  }))
+}
+
+export function createMockCodeSearchGroups(count: number = 2) {
+  return Array.from({ length: count }, (_, i) => ({
+    sys_id: `group-sys-id-${i + 1}`,
+    name: i === 0 ? 'Default Code Search Group' : `Custom Group ${i}`,
+    description: i === 0 ? 'The default code search group' : `Custom search group ${i}`,
+  }))
+}
+
+export function createMockCodeSearchTables(count: number = 3) {
+  const tables = [
+    { name: 'sys_script_include', label: 'Script Include' },
+    { name: 'sys_script', label: 'Business Rule' },
+    { name: 'sys_ui_script', label: 'UI Script' },
+  ]
+  return tables.slice(0, count)
+}
+
+export function createMockCodeSearchTableRecord(overrides?: Partial<{
+  sys_id: string;
+  table: string;
+  search_fields: string;
+  search_group: string;
+}>) {
+  return {
+    sys_id: overrides?.sys_id ?? 'table-record-123',
+    table: overrides?.table ?? 'sys_script_include',
+    search_fields: overrides?.search_fields ?? 'script,name',
+    search_group: overrides?.search_group ?? 'group-sys-id-1',
+  }
+}
+
 export function createMockTestSuiteResult(overrides?: Partial<{
   sys_id: string;
   number: string;

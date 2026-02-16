@@ -121,6 +121,36 @@ export class SyslogReader {
   }
 }
 
+export class CodeSearch {
+  search: ReturnType<typeof jest.fn>
+  searchRaw: ReturnType<typeof jest.fn>
+  searchInApp: ReturnType<typeof jest.fn>
+  searchInTable: ReturnType<typeof jest.fn>
+  getSearchGroups: ReturnType<typeof jest.fn>
+  getTablesForSearchGroup: ReturnType<typeof jest.fn>
+  addTableToSearchGroup: ReturnType<typeof jest.fn>
+  getTableRecordsForSearchGroup: ReturnType<typeof jest.fn>
+
+  static formatResultsAsText = jest.fn(() => 'No results found.')
+  static flattenResults = jest.fn(() => [])
+
+  constructor(_instance?: any) {
+    this.search = jest.fn(() => Promise.resolve([]))
+    this.searchRaw = jest.fn(() => Promise.resolve([]))
+    this.searchInApp = jest.fn(() => Promise.resolve([]))
+    this.searchInTable = jest.fn(() => Promise.resolve([]))
+    this.getSearchGroups = jest.fn(() => Promise.resolve([]))
+    this.getTablesForSearchGroup = jest.fn(() => Promise.resolve([]))
+    this.addTableToSearchGroup = jest.fn(() => Promise.resolve({
+      sys_id: 'new-table-record-123',
+      table: 'sys_script_include',
+      search_fields: 'script,name',
+      search_group: 'group-sys-id-123',
+    }))
+    this.getTableRecordsForSearchGroup = jest.fn(() => Promise.resolve([]))
+  }
+}
+
 export interface ServiceNowSettingsInstance {
   alias?: string
   credential: any
