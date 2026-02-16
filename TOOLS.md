@@ -579,3 +579,229 @@ Found: 5 column(s)
 
 Tip: Use column element names (left of parentheses) in encoded queries, GlideRecord scripts, and the fields parameter of query_table.
 ```
+
+---
+
+## code_search
+
+Search for code across a ServiceNow instance using the Code Search API. Finds matching scripts, business rules, script includes, and other code artifacts across the platform. Results include the record name, table, field, and matching line numbers with context.
+
+Code Search works through **Search Groups**, which define sets of tables and fields to search. There is typically a default search group. Use `list_code_search_groups` to discover available groups, and `list_code_search_tables` to see which tables a group covers.
+
+Key use cases:
+- Find scripts that reference a specific API, table, or pattern
+- Locate business rules, script includes, or UI scripts containing specific logic
+- Verify whether code has been deployed to an instance
+- Search within a specific application scope or table
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias (e.g., `"dev224436"`, `"prod"`). If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `term` | string | **Yes** | — | The search term to find in code. Searches across script fields in the tables defined by the search group. |
+| `search_group` | string | No | instance default | The search group NAME to scope the search (e.g., `"Default Code Search Group"`). Use `list_code_search_groups` to discover available groups. |
+| `table` | string | No | — | Specific table to search within (e.g., `"sys_script_include"`). Requires `search_group` to also be specified. Use `list_code_search_tables` to see available tables. |
+| `current_app` | string | No | — | Application scope to limit results to (e.g., `"x_myapp"`). When set, `search_all_scopes` is automatically set to false. |
+| `search_all_scopes` | boolean | No | `true` | When false, limits results to files within the scope specified by `current_app`. |
+| `limit` | number | No | — | Maximum number of results to return. |
+
+### Example Usage
+
+Search for all references to GlideRecord:
+
+```json
+{
+  "name": "code_search",
+  "arguments": {
+    "instance": "dev224436",
+    "term": "GlideRecord"
+  }
+}
+```
+
+Search within a specific search group and table:
+
+```json
+{
+  "name": "code_search",
+  "arguments": {
+    "instance": "dev224436",
+    "term": "addQuery",
+    "search_group": "Default Code Search Group",
+    "table": "sys_script_include",
+    "limit": 10
+  }
+}
+```
+
+Search within a specific application scope:
+
+```json
+{
+  "name": "code_search",
+  "arguments": {
+    "term": "validateInput",
+    "current_app": "x_myapp_custom"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Code Search Results ===
+Search: "GlideRecord" | Limit: 5
+
+Found 3 matches:
+
+  Script Include > IncidentUtils > Script
+    Table: sys_script_include, Field: script, Matches: 2
+      L10: var gr = new GlideRecord("incident");
+      L25: var gr2 = new GlideRecord("task");
+
+  Business Rule > Auto-assign incidents > Script
+    Table: sys_script, Field: script, Matches: 1
+      L5: var gr = new GlideRecord("sys_user_group");
+
+  UI Script > form_helpers > Script
+    Table: sys_ui_script, Field: script, Matches: 1
+      L42: var gr = new GlideRecord("sys_choice");
+
+Tip: Use `list_code_search_groups` to discover available search groups, then pass the group name as `search_group` to scope your search.
+```
+
+---
+
+## list_code_search_groups
+
+List available code search groups on a ServiceNow instance. Search groups define which tables and fields are included when performing a code search. Each instance typically has a default search group, and additional groups can be created for specific use cases.
+
+Use the group `name` as the `search_group` parameter in `code_search`. Use the group `sys_id` when adding tables via `add_code_search_table`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `limit` | number | No | `100` | Maximum number of search groups to return. |
+
+### Example Usage
+
+```json
+{
+  "name": "list_code_search_groups",
+  "arguments": {
+    "instance": "dev224436"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Code Search Groups ===
+Found: 2 group(s)
+
+1. Default Code Search Group
+   sys_id: abc123def456789012345678abcdef01
+   Description: The default code search group
+
+2. Custom Scripts Group
+   sys_id: def456abc789012345678901abcdef02
+   Description: Custom group for application-specific scripts
+
+=== 2 group(s) found ===
+
+Tip: Use the group name as `search_group` in `code_search`. Use the sys_id as `search_group` in `add_code_search_table`.
+```
+
+---
+
+## list_code_search_tables
+
+List the tables associated with a code search group. These are the tables and fields that are searched when performing a code search with that group.
+
+Use this to understand what a search group covers, or to identify if a specific table is missing and needs to be added via `add_code_search_table`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `search_group` | string | **Yes** | — | The search group NAME (not sys_id). Use `list_code_search_groups` to find available group names. |
+
+### Example Usage
+
+```json
+{
+  "name": "list_code_search_tables",
+  "arguments": {
+    "instance": "dev224436",
+    "search_group": "Default Code Search Group"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Tables in Search Group: Default Code Search Group ===
+Found: 5 table(s)
+
+1. sys_script_include (Script Include)
+2. sys_script (Business Rule)
+3. sys_ui_script (UI Script)
+4. sys_ui_action (UI Action)
+5. sys_ws_operation (Scripted REST Resource)
+
+=== 5 table(s) found ===
+
+Tip: Use `add_code_search_table` to add a table to this search group, or pass a table name as `table` in `code_search` to search a specific table.
+```
+
+---
+
+## add_code_search_table
+
+Add a new table to an existing code search group, expanding what gets searched. After adding a table, code searches using that group will also search the specified fields on the new table.
+
+Requires the search group's sys_id (get it from `list_code_search_groups`) and the table name and fields to search.
+
+> **Warning:** This modifies the code search configuration on the instance. Verify the table name and fields before adding.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `table` | string | **Yes** | — | The table name to add (e.g., `"sys_script_include"`, `"sys_ui_script"`). Use `lookup_table` to verify the table name exists. |
+| `search_fields` | string | **Yes** | — | Comma-separated field names to search on this table (e.g., `"script,name"`). Use `lookup_columns` to find available fields. |
+| `search_group` | string | **Yes** | — | The sys_id of the target code search group. Get this from `list_code_search_groups`. |
+
+### Example Usage
+
+```json
+{
+  "name": "add_code_search_table",
+  "arguments": {
+    "instance": "dev224436",
+    "table": "sys_ui_action",
+    "search_fields": "script,condition",
+    "search_group": "abc123def456789012345678abcdef01"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Code Search Table Added ===
+
+Table: sys_ui_action
+Search Fields: script,condition
+sys_id: new123record456789
+Search Group: abc123def456789012345678abcdef01
+
+The table has been added to the search group. Code searches using this group will now include results from this table.
+```
