@@ -107,6 +107,24 @@ Add to your `.claude/settings.json` or project-level `.mcp.json`:
 }
 ```
 
+### Opencode
+
+Add to your `.config/opencode/opencode.json` or project-level `opencode.jsonc`
+
+```json
+{
+  "mcp": {
+    "servicenow": {
+      "type": "local",
+      "command": ["node", "/absolute/path/to/now-sdk-ext-mcp/dist/index.js"],
+      "enabled": true,
+      "environment": {
+        "SN_AUTH_ALIAS": "dev224436"
+      }
+    }
+  }
+}
+
 ## How It Works
 
 Once connected, you can talk to your AI assistant naturally:
