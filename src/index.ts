@@ -19,6 +19,54 @@ import {
   registerListCodeSearchTablesTool,
   registerAddCodeSearchTableTool,
 } from "./tools/codesearch.js";
+import {
+  registerDiscoverTableSchemaTool,
+  registerExplainFieldTool,
+  registerValidateCatalogTool,
+} from "./tools/schema.js";
+import {
+  registerGetCurrentScopeTool,
+  registerSetCurrentScopeTool,
+  registerListScopedAppsTool,
+} from "./tools/scope.js";
+import {
+  registerGetCurrentUpdateSetTool,
+  registerListUpdateSetsTool,
+  registerCreateUpdateSetTool,
+  registerSetCurrentUpdateSetTool,
+  registerInspectUpdateSetTool,
+} from "./tools/updateset.js";
+import {
+  registerAddTaskCommentTool,
+  registerAssignTaskTool,
+  registerResolveIncidentTool,
+  registerCloseIncidentTool,
+  registerApproveChangeTool,
+  registerFindTaskTool,
+} from "./tools/task.js";
+import {
+  registerBatchCreateRecordsTool,
+  registerBatchUpdateRecordsTool,
+} from "./tools/batch.js";
+import {
+  registerListAttachmentsTool,
+  registerGetAttachmentInfoTool,
+} from "./tools/attachment.js";
+import {
+  registerGetAppDetailsTool,
+  registerValidateAppInstallTool,
+  registerSearchStoreAppsTool,
+  registerListCompanyAppsTool,
+  registerInstallStoreAppTool,
+  registerUpdateStoreAppTool,
+  registerInstallFromAppRepoTool,
+  registerPublishToAppRepoTool,
+} from "./tools/app-manager.js";
+import { registerCreateWorkflowTool } from "./tools/workflow.js";
+import {
+  registerPullScriptTool,
+  registerPushScriptTool,
+} from "./tools/scriptsync.js";
 
 const server = new McpServer({
   name: "now-sdk-ext-mcp",
@@ -39,6 +87,38 @@ registerCodeSearchTool(server);
 registerListCodeSearchGroupsTool(server);
 registerListCodeSearchTablesTool(server);
 registerAddCodeSearchTableTool(server);
+registerDiscoverTableSchemaTool(server);
+registerExplainFieldTool(server);
+registerValidateCatalogTool(server);
+registerGetCurrentScopeTool(server);
+registerSetCurrentScopeTool(server);
+registerListScopedAppsTool(server);
+registerGetCurrentUpdateSetTool(server);
+registerListUpdateSetsTool(server);
+registerCreateUpdateSetTool(server);
+registerSetCurrentUpdateSetTool(server);
+registerInspectUpdateSetTool(server);
+registerAddTaskCommentTool(server);
+registerAssignTaskTool(server);
+registerResolveIncidentTool(server);
+registerCloseIncidentTool(server);
+registerApproveChangeTool(server);
+registerFindTaskTool(server);
+registerBatchCreateRecordsTool(server);
+registerBatchUpdateRecordsTool(server);
+registerListAttachmentsTool(server);
+registerGetAttachmentInfoTool(server);
+registerGetAppDetailsTool(server);
+registerValidateAppInstallTool(server);
+registerSearchStoreAppsTool(server);
+registerListCompanyAppsTool(server);
+registerInstallStoreAppTool(server);
+registerUpdateStoreAppTool(server);
+registerInstallFromAppRepoTool(server);
+registerPublishToAppRepoTool(server);
+registerCreateWorkflowTool(server);
+registerPullScriptTool(server);
+registerPushScriptTool(server);
 
 // Prevent the process from crashing silently on unexpected errors.
 // Log to stderr (stdout is reserved for JSON-RPC).
