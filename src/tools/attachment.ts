@@ -164,3 +164,98 @@ export function registerGetAttachmentInfoTool(server: McpServer): void {
     }
   );
 }
+
+/**
+ * Registers the upload_attachment tool on the MCP server.
+ *
+ * Uploads a file attachment to a ServiceNow record.
+ */
+export function registerUploadAttachmentTool(server: McpServer): void {
+  server.registerTool(
+    "upload_attachment",
+    {
+      title: "Upload Attachment",
+      description:
+        "Upload a file attachment to a ServiceNow record. The file content must be " +
+        "provided as a base64-encoded string.\n\n" +
+        "IMPORTANT: This creates an attachment on the ServiceNow instance.",
+      inputSchema: {
+        instance: z
+          .string()
+          .optional()
+          .describe(
+            "The ServiceNow instance auth alias (e.g., " +
+              '"dev224436", "prod"). If not provided, falls back ' +
+              "to the SN_AUTH_ALIAS environment variable."
+          ),
+        table: z
+          .string()
+          .describe(
+            'The table name the record belongs to (e.g., "incident", "change_request").'
+          ),
+        record_sys_id: z
+          .string()
+          .describe("The sys_id of the record to attach the file to."),
+        file_name: z
+          .string()
+          .describe('The file name including extension (e.g., "report.pdf", "data.csv").'),
+        content_type: z
+          .string()
+          .describe(
+            'The MIME content type (e.g., "application/pdf", "text/csv", ' +
+              '"image/png", "application/json").'
+          ),
+        content_base64: z
+          .string()
+          .describe(
+            "The file content encoded as a base64 string. For text files, " +
+              "encode the text content to base64 before passing."
+          ),
+      },
+    },
+    async ({ instance, table, record_sys_id, file_name, content_type, content_base64 }) => {
+      try {
+        const data = Buffer.from(content_base64, "base64");
+
+        const result = await withConnectionRetry(
+          instance,
+          async (snInstance) => {
+            const mgr = new AttachmentManager(snInstance);
+            return await mgr.uploadAttachment({
+              tableName: table,
+              recordSysId: record_sys_id,
+              fileName: file_name,
+              contentType: content_type,
+              data,
+            });
+          }
+        );
+
+        const lines: string[] = [];
+        lines.push("=== Attachment Uploaded ===");
+        lines.push(`File Name: ${result.file_name || file_name}`);
+        lines.push(`sys_id: ${result.sys_id}`);
+        lines.push(`Table: ${table}`);
+        lines.push(`Record: ${record_sys_id}`);
+        if (result.content_type) lines.push(`Content Type: ${result.content_type}`);
+        if (result.size_bytes) lines.push(`Size: ${result.size_bytes} bytes`);
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error uploading attachment: ${message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+}

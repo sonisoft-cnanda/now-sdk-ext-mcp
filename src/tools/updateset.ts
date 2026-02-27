@@ -403,3 +403,157 @@ export function registerInspectUpdateSetTool(server: McpServer): void {
     }
   );
 }
+
+/**
+ * Registers the clone_update_set tool on the MCP server.
+ *
+ * Clones an update set by creating a new update set and copying all records from the source.
+ */
+export function registerCloneUpdateSetTool(server: McpServer): void {
+  server.registerTool(
+    "clone_update_set",
+    {
+      title: "Clone Update Set",
+      description:
+        "Clone an existing update set by creating a new one and copying all its records. " +
+        "The new update set gets the specified name and starts in 'in progress' state.\n\n" +
+        "IMPORTANT: This creates a new update set and copies all records on the instance.",
+      inputSchema: {
+        instance: z
+          .string()
+          .optional()
+          .describe(
+            "The ServiceNow instance auth alias to connect to. " +
+            "This is the alias configured via `snc configure` (e.g., " +
+            '"dev224436", "prod", "test"). The user will typically refer to ' +
+            "this by name when saying things like \"on my dev224436 instance\". " +
+            "If not provided, falls back to the SN_AUTH_ALIAS environment variable."
+          ),
+        source_sys_id: z
+          .string()
+          .describe("The sys_id of the update set to clone."),
+        new_name: z
+          .string()
+          .describe("The name for the new cloned update set."),
+      },
+    },
+    async ({ instance, source_sys_id, new_name }) => {
+      try {
+        const result = await withConnectionRetry(instance, async (snInstance) => {
+          const manager = new UpdateSetManager(snInstance);
+          return await manager.cloneUpdateSet(source_sys_id, new_name);
+        });
+
+        const lines: string[] = [];
+        lines.push("=== Update Set Cloned ===");
+        lines.push(`Source: ${result.sourceUpdateSetName} (${result.sourceUpdateSetId})`);
+        lines.push(`New: ${result.newUpdateSetName} (${result.newUpdateSetId})`);
+        lines.push(`Records cloned: ${result.recordsCloned}/${result.totalSourceRecords}`);
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error cloning update set: ${message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+}
+
+/**
+ * Registers the move_update_set_records tool on the MCP server.
+ *
+ * Moves records from one update set to another.
+ */
+export function registerMoveUpdateSetRecordsTool(server: McpServer): void {
+  server.registerTool(
+    "move_update_set_records",
+    {
+      title: "Move Update Set Records",
+      description:
+        "Move records from one update set to another. You can move specific records " +
+        "by sys_id, or move all records from a source update set.\n\n" +
+        "IMPORTANT: This modifies update set membership of records on the instance.",
+      inputSchema: {
+        instance: z
+          .string()
+          .optional()
+          .describe(
+            "The ServiceNow instance auth alias to connect to. " +
+            "This is the alias configured via `snc configure` (e.g., " +
+            '"dev224436", "prod", "test"). The user will typically refer to ' +
+            "this by name when saying things like \"on my dev224436 instance\". " +
+            "If not provided, falls back to the SN_AUTH_ALIAS environment variable."
+          ),
+        target_update_set_id: z
+          .string()
+          .describe("The sys_id of the update set to move records TO."),
+        record_sys_ids: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Specific sys_ids of sys_update_xml records to move. " +
+            "If omitted and source_update_set is provided, moves all records from the source."
+          ),
+        source_update_set: z
+          .string()
+          .optional()
+          .describe(
+            "The sys_id of the source update set to move all records FROM. " +
+            "Used when record_sys_ids is not specified."
+          ),
+      },
+    },
+    async ({ instance, target_update_set_id, record_sys_ids, source_update_set }) => {
+      try {
+        const result = await withConnectionRetry(instance, async (snInstance) => {
+          const manager = new UpdateSetManager(snInstance);
+          return await manager.moveRecordsToUpdateSet(target_update_set_id, {
+            recordSysIds: record_sys_ids,
+            sourceUpdateSet: source_update_set,
+          });
+        });
+
+        const lines: string[] = [];
+        lines.push("=== Move Update Set Records ===");
+        lines.push(`Target Update Set: ${target_update_set_id}`);
+        lines.push(`Moved: ${result.moved}`);
+        lines.push(`Failed: ${result.failed}`);
+
+        if (result.errors && result.errors.length > 0) {
+          lines.push("");
+          lines.push("Errors:");
+          for (const err of result.errors) {
+            lines.push(`  ${JSON.stringify(err)}`);
+          }
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error moving update set records: ${message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+}

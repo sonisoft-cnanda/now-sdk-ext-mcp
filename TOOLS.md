@@ -2297,3 +2297,532 @@ Type: sys_script_include
 sys_id: abc123def456789
 Message: Script pushed successfully
 ```
+
+---
+
+## count_records
+
+Count records on any ServiceNow table using the Stats API. Efficient server-side counting — much faster than querying all records.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `table` | string | **Yes** | — | The table name to count records on (e.g., `"incident"`, `"sys_user"`). |
+| `query` | string | No | — | Encoded query string to filter which records are counted. |
+
+### Example Usage
+
+```json
+{
+  "name": "count_records",
+  "arguments": {
+    "instance": "dev224436",
+    "table": "incident",
+    "query": "active=true^priority=1"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Record Count ===
+Table: incident
+Query: active=true^priority=1
+Count: 42
+```
+
+---
+
+## aggregate_query
+
+Run aggregate functions (COUNT, AVG, MIN, MAX, SUM) on any ServiceNow table using the Stats API.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `table` | string | **Yes** | — | The table name to aggregate. |
+| `query` | string | No | — | Encoded query string to filter records before aggregation. |
+| `count` | boolean | No | — | When true, include a COUNT in the results. |
+| `avg_fields` | string[] | No | — | Field names to compute AVG on. |
+| `min_fields` | string[] | No | — | Field names to compute MIN on. |
+| `max_fields` | string[] | No | — | Field names to compute MAX on. |
+| `sum_fields` | string[] | No | — | Field names to compute SUM on. |
+| `display_value` | string | No | — | `"true"`, `"false"`, or `"all"` for display value handling. |
+
+### Example Usage
+
+```json
+{
+  "name": "aggregate_query",
+  "arguments": {
+    "instance": "dev224436",
+    "table": "incident",
+    "query": "active=true",
+    "count": true,
+    "avg_fields": ["reassignment_count"]
+  }
+}
+```
+
+### Example Output
+
+```
+=== Aggregate Results ===
+Table: incident
+Query: active=true
+
+Stats:
+{
+  "count": "156",
+  "avg.reassignment_count": "2.3"
+}
+```
+
+---
+
+## aggregate_grouped
+
+Run aggregate functions grouped by a field — ideal for breakdowns and dashboards.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `table` | string | **Yes** | — | The table name to aggregate. |
+| `group_by` | string[] | **Yes** | — | Field name(s) to group by (e.g., `["priority"]`). |
+| `query` | string | No | — | Encoded query string to filter records before aggregation. |
+| `count` | boolean | No | — | When true, include a COUNT per group. |
+| `avg_fields` | string[] | No | — | Field names to compute AVG on per group. |
+| `min_fields` | string[] | No | — | Field names to compute MIN on per group. |
+| `max_fields` | string[] | No | — | Field names to compute MAX on per group. |
+| `sum_fields` | string[] | No | — | Field names to compute SUM on per group. |
+| `having` | string | No | — | HAVING clause to filter groups (e.g., `"COUNT>10"`). |
+| `display_value` | string | No | — | `"true"`, `"false"`, or `"all"`. |
+
+### Example Usage
+
+```json
+{
+  "name": "aggregate_grouped",
+  "arguments": {
+    "instance": "dev224436",
+    "table": "incident",
+    "group_by": ["priority"],
+    "query": "active=true",
+    "count": true
+  }
+}
+```
+
+### Example Output
+
+```
+=== Grouped Aggregate Results ===
+Table: incident
+Group By: priority
+Query: active=true
+Groups returned: 4
+
+--- Group ---
+  priority: 1
+  Stats: {"count":"12"}
+
+--- Group ---
+  priority: 2
+  Stats: {"count":"34"}
+
+--- Group ---
+  priority: 3
+  Stats: {"count":"67"}
+
+--- Group ---
+  priority: 4
+  Stats: {"count":"43"}
+
+=== 4 group(s) returned ===
+```
+
+---
+
+## check_instance_health
+
+Run a consolidated health check on a ServiceNow instance covering version, cluster, jobs, semaphores, and operational counts.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `include_version` | boolean | No | `true` | Include ServiceNow version/build info. |
+| `include_cluster` | boolean | No | `true` | Include cluster node status. |
+| `include_stuck_jobs` | boolean | No | `true` | Include stuck scheduled jobs. |
+| `include_semaphores` | boolean | No | `true` | Include active semaphore count. |
+| `include_operational_counts` | boolean | No | `true` | Include open incidents/changes/problems counts. |
+| `stuck_job_threshold_minutes` | number | No | `30` | Threshold in minutes for stuck job detection. |
+
+### Example Usage
+
+```json
+{
+  "name": "check_instance_health",
+  "arguments": {
+    "instance": "dev224436"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Instance Health Check ===
+Timestamp: 2026-02-27T11:00:00.000Z
+
+--- Version Info ---
+  Version: Vancouver Patch 3
+  Build Date: 2026-01-15
+  Build Tag: glide-vancouver-12-20-2025
+
+--- Cluster Nodes (2) ---
+  node1: status=online
+  node2: status=online
+
+--- Stuck Jobs (0) ---
+  None detected
+
+--- Semaphores ---
+  Active count: 3
+
+--- Operational Counts ---
+  Open Incidents: 156
+  Open Changes: 23
+  Open Problems: 8
+
+Summary: Instance healthy — 2 nodes online, 0 stuck jobs
+```
+
+---
+
+## get_cmdb_relationships
+
+Get direct upstream/downstream relationships of a CMDB Configuration Item.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `ci_sys_id` | string | **Yes** | — | The sys_id of the Configuration Item. |
+| `direction` | string | No | `"both"` | `"upstream"`, `"downstream"`, or `"both"`. |
+| `relation_type` | string | No | — | Filter by relationship type name. |
+| `limit` | number | No | `100` | Maximum relationships to return (1-1000). |
+
+### Example Usage
+
+```json
+{
+  "name": "get_cmdb_relationships",
+  "arguments": {
+    "instance": "dev224436",
+    "ci_sys_id": "abc123def456789",
+    "direction": "downstream"
+  }
+}
+```
+
+---
+
+## traverse_cmdb_graph
+
+Traverse the CMDB relationship graph via BFS from a root CI. Max depth 5, max 1000 nodes.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `ci_sys_id` | string | **Yes** | — | The sys_id of the root CI to start traversal from. |
+| `direction` | string | No | `"both"` | `"upstream"`, `"downstream"`, or `"both"`. |
+| `max_depth` | number | No | `2` | Maximum traversal depth (1-5). |
+| `relation_type` | string | No | — | Only follow this relationship type. |
+| `max_nodes` | number | No | `200` | Maximum nodes to visit (1-1000). |
+
+### Example Usage
+
+```json
+{
+  "name": "traverse_cmdb_graph",
+  "arguments": {
+    "instance": "dev224436",
+    "ci_sys_id": "abc123def456789",
+    "max_depth": 3,
+    "direction": "downstream"
+  }
+}
+```
+
+---
+
+## list_instance_tables
+
+List tables on a ServiceNow instance with filtering by name prefix, scope, and extendability.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `name_prefix` | string | No | — | Filter tables starting with this prefix (e.g., `"cmdb_ci"`, `"x_myapp"`). |
+| `scope` | string | No | — | Filter by application scope. |
+| `extendable_only` | boolean | No | — | When true, only return extendable tables. |
+| `query` | string | No | — | Encoded query for advanced filtering on sys_db_object. |
+| `limit` | number | No | `50` | Maximum tables to return (1-500). |
+| `offset` | number | No | — | Pagination offset. |
+
+### Example Usage
+
+```json
+{
+  "name": "list_instance_tables",
+  "arguments": {
+    "instance": "dev224436",
+    "name_prefix": "cmdb_ci",
+    "limit": 20
+  }
+}
+```
+
+---
+
+## list_plugins
+
+List ServiceNow platform plugins. Returns plugin ID, name, version, and active status.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `name_prefix` | string | No | — | Filter plugins by name prefix. |
+| `active_only` | boolean | No | `true` | When true, only return active plugins. |
+| `query` | string | No | — | Encoded query for advanced filtering on sys_plugins. |
+| `limit` | number | No | `50` | Maximum plugins to return (1-500). |
+
+### Example Usage
+
+```json
+{
+  "name": "list_plugins",
+  "arguments": {
+    "instance": "dev224436",
+    "name_prefix": "com.snc.incident",
+    "active_only": true
+  }
+}
+```
+
+---
+
+## query_update_records
+
+Find records matching an encoded query and update them in bulk. Supports dry-run mode.
+
+> **Warning:** When `confirm=true`, this modifies records on the ServiceNow instance. Always run with `confirm=false` first to verify the match count.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `table` | string | **Yes** | — | The table to update records on. |
+| `query` | string | **Yes** | — | Encoded query to find records. |
+| `data` | object | **Yes** | — | Field values to set on all matching records. |
+| `confirm` | boolean | No | `false` | `false` = dry-run (preview only), `true` = execute updates. |
+| `limit` | number | No | — | Maximum records to update. |
+
+### Example Usage
+
+```json
+{
+  "name": "query_update_records",
+  "arguments": {
+    "instance": "dev224436",
+    "table": "incident",
+    "query": "active=true^priority=5",
+    "data": {"priority": "4"},
+    "confirm": false
+  }
+}
+```
+
+### Example Output (dry-run)
+
+```
+=== Query Update — DRY RUN ===
+Table: incident
+Query: active=true^priority=5
+Records that would be updated: 23
+
+No changes were made. Set confirm=true to execute the update.
+```
+
+---
+
+## query_delete_records
+
+Find records matching an encoded query and delete them in bulk. Supports dry-run mode.
+
+> **Warning:** When `confirm=true`, this PERMANENTLY DELETES records. Always run with `confirm=false` first.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `table` | string | **Yes** | — | The table to delete records from. |
+| `query` | string | **Yes** | — | Encoded query to find records. |
+| `confirm` | boolean | No | `false` | `false` = dry-run, `true` = execute deletes. |
+| `limit` | number | No | — | Maximum records to delete. |
+
+### Example Usage
+
+```json
+{
+  "name": "query_delete_records",
+  "arguments": {
+    "instance": "dev224436",
+    "table": "sys_audit_delete",
+    "query": "sys_created_on<javascript:gs.daysAgoStart(365)",
+    "confirm": false
+  }
+}
+```
+
+---
+
+## clone_update_set
+
+Clone an existing update set by creating a new one and copying all its records.
+
+> **Warning:** This creates a new update set and copies records on the instance.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `source_sys_id` | string | **Yes** | — | The sys_id of the update set to clone. |
+| `new_name` | string | **Yes** | — | Name for the new cloned update set. |
+
+### Example Usage
+
+```json
+{
+  "name": "clone_update_set",
+  "arguments": {
+    "instance": "dev224436",
+    "source_sys_id": "abc123def456789",
+    "new_name": "My Feature v2 - Copy"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Update Set Cloned ===
+Source: My Feature v2 (abc123def456789)
+New: My Feature v2 - Copy (def456789abc123)
+Records cloned: 15/15
+```
+
+---
+
+## move_update_set_records
+
+Move records from one update set to another.
+
+> **Warning:** This modifies update set membership of records on the instance.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `target_update_set_id` | string | **Yes** | — | The sys_id of the update set to move records TO. |
+| `record_sys_ids` | string[] | No | — | Specific sys_update_xml record sys_ids to move. |
+| `source_update_set` | string | No | — | Source update set sys_id to move all records FROM. |
+
+### Example Usage
+
+```json
+{
+  "name": "move_update_set_records",
+  "arguments": {
+    "instance": "dev224436",
+    "target_update_set_id": "def456789abc123",
+    "source_update_set": "abc123def456789"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Move Update Set Records ===
+Target Update Set: def456789abc123
+Moved: 8
+Failed: 0
+```
+
+---
+
+## upload_attachment
+
+Upload a file attachment to a ServiceNow record. Content is provided as base64-encoded string.
+
+> **Warning:** This creates an attachment on the ServiceNow instance.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `table` | string | **Yes** | — | The table the record belongs to. |
+| `record_sys_id` | string | **Yes** | — | The sys_id of the record to attach the file to. |
+| `file_name` | string | **Yes** | — | File name with extension (e.g., `"report.pdf"`). |
+| `content_type` | string | **Yes** | — | MIME type (e.g., `"application/pdf"`, `"text/csv"`). |
+| `content_base64` | string | **Yes** | — | File content encoded as base64. |
+
+### Example Usage
+
+```json
+{
+  "name": "upload_attachment",
+  "arguments": {
+    "instance": "dev224436",
+    "table": "incident",
+    "record_sys_id": "abc123def456789",
+    "file_name": "notes.txt",
+    "content_type": "text/plain",
+    "content_base64": "SGVsbG8gV29ybGQh"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Attachment Uploaded ===
+File Name: notes.txt
+sys_id: xyz789abc123def
+Table: incident
+Record: abc123def456789
+Content Type: text/plain
+Size: 12 bytes
+```

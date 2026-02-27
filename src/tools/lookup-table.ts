@@ -103,7 +103,7 @@ export function registerLookupTableTool(server: McpServer): void {
                 sysparm_fields:
                   "sys_id,name,label,super_class,is_extendable,number_ref,sys_scope",
                 sysparm_limit: limit,
-                sysparm_display_value: "true",
+                sysparm_display_value: "all",
               }
             );
 
