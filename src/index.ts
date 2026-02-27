@@ -35,6 +35,8 @@ import {
   registerCreateUpdateSetTool,
   registerSetCurrentUpdateSetTool,
   registerInspectUpdateSetTool,
+  registerCloneUpdateSetTool,
+  registerMoveUpdateSetRecordsTool,
 } from "./tools/updateset.js";
 import {
   registerAddTaskCommentTool,
@@ -51,6 +53,7 @@ import {
 import {
   registerListAttachmentsTool,
   registerGetAttachmentInfoTool,
+  registerUploadAttachmentTool,
 } from "./tools/attachment.js";
 import {
   registerGetAppDetailsTool,
@@ -67,6 +70,24 @@ import {
   registerPullScriptTool,
   registerPushScriptTool,
 } from "./tools/scriptsync.js";
+import {
+  registerCountRecordsTool,
+  registerAggregateQueryTool,
+  registerAggregateGroupedTool,
+} from "./tools/aggregate.js";
+import { registerCheckInstanceHealthTool } from "./tools/health.js";
+import {
+  registerGetCmdbRelationshipsTool,
+  registerTraverseCmdbGraphTool,
+} from "./tools/cmdb.js";
+import {
+  registerListInstanceTablesTool,
+  registerListPluginsTool,
+} from "./tools/discovery.js";
+import {
+  registerQueryUpdateRecordsTool,
+  registerQueryDeleteRecordsTool,
+} from "./tools/query-batch.js";
 
 const server = new McpServer({
   name: "now-sdk-ext-mcp",
@@ -119,6 +140,19 @@ registerPublishToAppRepoTool(server);
 registerCreateWorkflowTool(server);
 registerPullScriptTool(server);
 registerPushScriptTool(server);
+registerCountRecordsTool(server);
+registerAggregateQueryTool(server);
+registerAggregateGroupedTool(server);
+registerCheckInstanceHealthTool(server);
+registerGetCmdbRelationshipsTool(server);
+registerTraverseCmdbGraphTool(server);
+registerListInstanceTablesTool(server);
+registerListPluginsTool(server);
+registerQueryUpdateRecordsTool(server);
+registerQueryDeleteRecordsTool(server);
+registerCloneUpdateSetTool(server);
+registerMoveUpdateSetRecordsTool(server);
+registerUploadAttachmentTool(server);
 
 // Prevent the process from crashing silently on unexpected errors.
 // Log to stderr (stdout is reserved for JSON-RPC).

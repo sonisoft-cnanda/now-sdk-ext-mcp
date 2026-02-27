@@ -126,7 +126,7 @@ export function registerLookupColumnsTool(server: McpServer): void {
                 sysparm_fields:
                   "element,column_label,internal_type,max_length,reference,mandatory,active,read_only,default_value",
                 sysparm_limit: limit,
-                sysparm_display_value: "true",
+                sysparm_display_value: "all",
               }
             );
 
