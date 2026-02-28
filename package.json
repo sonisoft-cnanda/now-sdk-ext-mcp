@@ -1,6 +1,6 @@
 {
   "name": "@sonisoft/now-sdk-ext-mcp",
-  "version": "1.0.0-alpha.0",
+  "version": "1.0.0",
   "description": "MCP server for interacting with ServiceNow instances via @sonisoft/now-sdk-ext-core",
   "keywords": [
     "servicenow",
