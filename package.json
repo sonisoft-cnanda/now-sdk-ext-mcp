@@ -13,6 +13,10 @@
     "testing",
     "now-sdk"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sonisoft-cnanda/now-sdk-ext-mcp.git"
+  },
   "author": "Chris Nanda",
   "license": "MIT",
   "type": "module",
@@ -54,6 +58,9 @@
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": ">=18.0.0"
