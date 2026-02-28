@@ -124,6 +124,7 @@ Add to your `.config/opencode/opencode.json` or project-level `opencode.jsonc`
     }
   }
 }
+```
 
 ## How It Works
 
