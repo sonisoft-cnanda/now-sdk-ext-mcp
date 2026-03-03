@@ -8,8 +8,8 @@ Built on [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/t
 
 ### Prerequisites
 
-- **Node.js** >= 18
-- **ServiceNow CLI credentials** configured via `snc configure`
+- **Node.js** >= 22
+- **ServiceNow CLI credentials** configured via `now-sdk auth --add`
 
 ### Install and Build
 
@@ -22,13 +22,32 @@ npm run build
 
 ### Configure Credentials
 
-This server uses the same credential store as the ServiceNow CLI (`snc`). If you haven't already, configure your instance credentials:
+This server uses the same credential store as the ServiceNow CLI. If you haven't already, configure your instance credentials:
 
 ```bash
 now-sdk auth --add <instance_alias>
 ```
 
 This stores credentials locally so the MCP server can authenticate without prompting.
+
+> **Breaking Change in v2.0.0 (ServiceNow SDK 4.3.0)**
+>
+> v2.0.0 upgrades the underlying ServiceNow SDK from 4.2.x to 4.3.0, which **changed how credential aliases are stored** (replacing the previous `keytar`-based credential store with a new implementation).
+>
+> If you are upgrading from v1.x:
+> - Credential aliases created with ServiceNow SDK 4.2.x **cannot be read** by SDK 4.3.x
+> - You **must re-create all instance aliases** after upgrading
+>
+> ```bash
+> # 1. Update the global CLI
+> npm install -g @servicenow/sdk@4.3.0
+>
+> # 2. Re-add each instance alias
+> now-sdk auth --add <your-alias>
+>
+> # 3. Verify your aliases work
+> now-sdk auth --list
+> ```
 
 ### Run the Server
 
