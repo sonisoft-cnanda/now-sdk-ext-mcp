@@ -1,12 +1,13 @@
 name: Publish to npm
 
 on:
+  # Auto-triggered when semantic-release creates a GitHub release
+  release:
+    types: [published]
+
+  # Manual trigger for re-publishing or one-off releases
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to publish (e.g. 1.0.0, 2.0.0-beta.1). Leave empty to use the version in package.json."
-        required: false
-        type: string
       tag:
         description: "npm dist-tag"
         required: false
@@ -25,14 +26,18 @@ on:
 
 jobs:
   publish:
+    name: Publish to npm
     runs-on: ubuntu-latest
+    environment: npm
     permissions:
-      contents: write
+      contents: read
       id-token: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -43,42 +48,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
       - name: Build
         run: npm run build
 
-      - name: Run unit tests
-        run: npm run test:unit
-
-      - name: Set version (if provided)
-        if: inputs.version != ''
-        run: npm version "${{ inputs.version }}" --no-git-tag-version
+      - name: Determine dist-tag
+        id: dist-tag
+        run: |
+          VERSION=$(node -e 'console.log(require("./package.json").version)')
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          elif echo "$VERSION" | grep -qE "(alpha|beta|rc|next)"; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Publish (dry run)
-        if: inputs.dry-run
-        run: npm publish --tag "${{ inputs.tag }}" --dry-run
+        if: inputs.dry-run == true
+        run: npm publish --tag "${{ steps.dist-tag.outputs.tag }}" --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish
-        if: "!inputs.dry-run"
-        run: npm publish --tag "${{ inputs.tag }}" --provenance
+        if: inputs.dry-run != true
+        run: npm publish --tag "${{ steps.dist-tag.outputs.tag }}" --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Get published version
-        if: "!inputs.dry-run"
-        id: version
-        run: echo "version=$(node -e 'console.log(require("./package.json").version)')" >> "$GITHUB_OUTPUT"
-
-      - name: Create git tag
-        if: "!inputs.dry-run && inputs.version != ''"
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
-          git commit -m "chore: release v${{ steps.version.outputs.version }}"
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin main --tags
+      - name: Summary
+        if: inputs.dry-run != true
+        run: echo "Published @sonisoft/now-sdk-ext-mcp@${{ steps.dist-tag.outputs.version }} with tag '${{ steps.dist-tag.outputs.tag }}'" >> "$GITHUB_STEP_SUMMARY"
