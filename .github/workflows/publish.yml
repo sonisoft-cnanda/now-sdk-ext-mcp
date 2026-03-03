@@ -87,8 +87,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Summary
-        if: steps.dist-tag.outputs.skip != 'true'
+        if: inputs.dry-run != true && steps.dist-tag.outputs.skip != 'true'
         run: echo "Published @sonisoft/now-sdk-ext-mcp@${{ steps.dist-tag.outputs.version }} with tag '${{ steps.dist-tag.outputs.tag }}'" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dry run summary
+        if: inputs.dry-run == true && steps.dist-tag.outputs.skip != 'true'
+        run: echo "Dry run — validated @sonisoft/now-sdk-ext-mcp@${{ steps.dist-tag.outputs.version }} with tag '${{ steps.dist-tag.outputs.tag }}' (no publish performed)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Skip summary
         if: steps.dist-tag.outputs.skip == 'true'
