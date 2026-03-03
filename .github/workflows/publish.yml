@@ -51,10 +51,20 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Determine dist-tag
+      - name: Determine dist-tag and check version
         id: dist-tag
         run: |
           VERSION=$(node -e 'console.log(require("./package.json").version)')
+          PACKAGE_NAME=$(node -e 'console.log(require("./package.json").name)')
+
+          # Check if this version already exists on npm
+          if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
+            echo "Version ${VERSION} already exists on npm — skipping publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
           if [ -n "${{ inputs.tag }}" ]; then
             echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
           elif echo "$VERSION" | grep -qE "(alpha|beta|rc|next)"; then
@@ -65,17 +75,21 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Publish (dry run)
-        if: inputs.dry-run == true
+        if: inputs.dry-run == true && steps.dist-tag.outputs.skip != 'true'
         run: npm publish --tag "${{ steps.dist-tag.outputs.tag }}" --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish
-        if: inputs.dry-run != true
+        if: inputs.dry-run != true && steps.dist-tag.outputs.skip != 'true'
         run: npm publish --tag "${{ steps.dist-tag.outputs.tag }}" --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Summary
-        if: inputs.dry-run != true
+        if: steps.dist-tag.outputs.skip != 'true'
         run: echo "Published @sonisoft/now-sdk-ext-mcp@${{ steps.dist-tag.outputs.version }} with tag '${{ steps.dist-tag.outputs.tag }}'" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Skip summary
+        if: steps.dist-tag.outputs.skip == 'true'
+        run: echo "Skipped — @sonisoft/now-sdk-ext-mcp@${{ steps.dist-tag.outputs.version }} already exists on npm" >> "$GITHUB_STEP_SUMMARY"
