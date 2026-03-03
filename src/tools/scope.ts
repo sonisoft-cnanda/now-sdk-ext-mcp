@@ -112,8 +112,8 @@ export function registerSetCurrentScopeTool(server: McpServer): void {
           .string()
           .describe(
             "The sys_id of the application to set as the current scope. " +
-            "Must be a 32-character hexadecimal string (e.g., " +
-            '"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6").'
+            'Must be a 32-character hexadecimal string (e.g., "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6") ' +
+            'or "global" for the Global scope.'
           ),
       },
     },
