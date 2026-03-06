@@ -88,6 +88,29 @@ import {
   registerQueryUpdateRecordsTool,
   registerQueryDeleteRecordsTool,
 } from "./tools/query-batch.js";
+import {
+  registerExportRecordXmlTool,
+  registerImportRecordsXmlTool,
+} from "./tools/xml-record.js";
+import {
+  registerListKnowledgeBasesTool,
+  registerGetKnowledgeBaseTool,
+  registerListKbCategoriesTool,
+  registerCreateKbCategoryTool,
+  registerListKbArticlesTool,
+  registerGetKbArticleTool,
+  registerCreateKbArticleTool,
+  registerUpdateKbArticleTool,
+  registerPublishKbArticleTool,
+} from "./tools/knowledge.js";
+import {
+  registerListCatalogItemsTool,
+  registerGetCatalogItemTool,
+  registerListCatalogCategoriesTool,
+  registerGetCatalogCategoryTool,
+  registerListCatalogItemVariablesTool,
+  registerSubmitCatalogRequestTool,
+} from "./tools/catalog.js";
 
 const server = new McpServer({
   name: "now-sdk-ext-mcp",
@@ -153,6 +176,23 @@ registerQueryDeleteRecordsTool(server);
 registerCloneUpdateSetTool(server);
 registerMoveUpdateSetRecordsTool(server);
 registerUploadAttachmentTool(server);
+registerExportRecordXmlTool(server);
+registerImportRecordsXmlTool(server);
+registerListKnowledgeBasesTool(server);
+registerGetKnowledgeBaseTool(server);
+registerListKbCategoriesTool(server);
+registerCreateKbCategoryTool(server);
+registerListKbArticlesTool(server);
+registerGetKbArticleTool(server);
+registerCreateKbArticleTool(server);
+registerUpdateKbArticleTool(server);
+registerPublishKbArticleTool(server);
+registerListCatalogItemsTool(server);
+registerGetCatalogItemTool(server);
+registerListCatalogCategoriesTool(server);
+registerGetCatalogCategoryTool(server);
+registerListCatalogItemVariablesTool(server);
+registerSubmitCatalogRequestTool(server);
 
 // Prevent the process from crashing silently on unexpected errors.
 // Log to stderr (stdout is reserved for JSON-RPC).
