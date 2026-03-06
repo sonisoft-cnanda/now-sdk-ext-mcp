@@ -59,7 +59,7 @@ export function registerExportRecordXmlTool(server: McpServer): void {
         const summary =
           `Exported record from ${result.table}/${result.sysId}` +
           (result.unloadDate ? ` (unload date: ${result.unloadDate})` : "") +
-          ` — ${result.xml.length} bytes of XML`;
+          ` — ${Buffer.byteLength(result.xml, "utf8")} bytes of XML`;
 
         return {
           content: [
@@ -134,12 +134,23 @@ export function registerImportRecordsXmlTool(server: McpServer): void {
           });
         });
 
-        const status = result.success ? "Successfully imported" : "Import failed for";
+        if (!result.success) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Import failed for records into table '${result.targetTable}'.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `${status} records into table '${result.targetTable}'.`,
+              text: `Successfully imported records into table '${result.targetTable}'.`,
             },
           ],
         };

@@ -42,8 +42,8 @@ export function registerListCatalogItemsTool(server: McpServer): void {
           .describe("Filter items by catalog sys_id (sc_catalogs field)."),
         active: z.boolean().optional().describe("Filter by active status. Omit to return all."),
         query: z.string().optional().describe("Optional encoded query for additional filtering."),
-        limit: z.number().default(20).describe("Maximum number of records to return (default 20)."),
-        offset: z.number().default(0).describe("Number of records to skip for pagination (default 0)."),
+        limit: z.number().int().min(1).default(20).describe("Maximum number of records to return (default 20)."),
+        offset: z.number().int().min(0).default(0).describe("Number of records to skip for pagination (default 0)."),
       },
     },
     async ({ instance, text_search, category_sys_id, catalog_sys_id, active, query, limit, offset }) => {
@@ -182,8 +182,8 @@ export function registerListCatalogCategoriesTool(server: McpServer): void {
         active: z.boolean().optional().describe("Filter by active status. Omit to return all."),
         title: z.string().optional().describe("Filter by exact category title."),
         query: z.string().optional().describe("Optional encoded query for additional filtering."),
-        limit: z.number().default(20).describe("Maximum number of records to return (default 20)."),
-        offset: z.number().default(0).describe("Number of records to skip for pagination (default 0)."),
+        limit: z.number().int().min(1).default(20).describe("Maximum number of records to return (default 20)."),
+        offset: z.number().int().min(0).default(0).describe("Number of records to skip for pagination (default 0)."),
       },
     },
     async ({ instance, parent_sys_id, catalog_sys_id, active, title, query, limit, offset }) => {
@@ -375,6 +375,8 @@ export function registerSubmitCatalogRequestTool(server: McpServer): void {
           .describe("The sys_id of the catalog item to order."),
         quantity: z
           .number()
+          .int()
+          .min(1)
           .default(1)
           .describe("Number of items to request (default 1)."),
         variables: z

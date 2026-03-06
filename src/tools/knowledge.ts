@@ -40,10 +40,14 @@ export function registerListKnowledgeBasesTool(server: McpServer): void {
           .describe("Filter by active status. Omit to return all."),
         limit: z
           .number()
+          .int()
+          .min(1)
           .default(20)
-          .describe("Maximum number of records to return (default 20, max 200)."),
+          .describe("Maximum number of records to return (default 20)."),
         offset: z
           .number()
+          .int()
+          .min(0)
           .default(0)
           .describe("Number of records to skip for pagination (default 0)."),
       },
@@ -156,8 +160,8 @@ export function registerListKbCategoriesTool(server: McpServer): void {
           .describe("Filter by parent category sys_id to get subcategories."),
         query: z.string().optional().describe("Optional encoded query for additional filtering."),
         active: z.boolean().optional().describe("Filter by active status. Omit to return all."),
-        limit: z.number().default(20).describe("Maximum number of records to return (default 20)."),
-        offset: z.number().default(0).describe("Number of records to skip for pagination (default 0)."),
+        limit: z.number().int().min(1).default(20).describe("Maximum number of records to return (default 20)."),
+        offset: z.number().int().min(0).default(0).describe("Number of records to skip for pagination (default 0)."),
       },
     },
     async ({ instance, knowledge_base_sys_id, parent_category, query, active, limit, offset }) => {
@@ -295,8 +299,8 @@ export function registerListKbArticlesTool(server: McpServer): void {
           .optional()
           .describe("Search articles by title (short_description contains this text)."),
         query: z.string().optional().describe("Optional encoded query for additional filtering."),
-        limit: z.number().default(20).describe("Maximum number of records to return (default 20)."),
-        offset: z.number().default(0).describe("Number of records to skip for pagination (default 0)."),
+        limit: z.number().int().min(1).default(20).describe("Maximum number of records to return (default 20)."),
+        offset: z.number().int().min(0).default(0).describe("Number of records to skip for pagination (default 0)."),
       },
     },
     async ({ instance, knowledge_base_sys_id, category_sys_id, workflow_state, text_search, query, limit, offset }) => {
@@ -433,7 +437,7 @@ export function registerCreateKbArticleTool(server: McpServer): void {
           .optional()
           .describe("The article type (e.g., 'text', 'wiki'). Defaults to platform default."),
         workflow_state: z
-          .string()
+          .enum(["draft", "published", "retired"])
           .default("draft")
           .describe("The initial workflow state: 'draft' (default), 'published', or 'retired'."),
         additional_fields: z

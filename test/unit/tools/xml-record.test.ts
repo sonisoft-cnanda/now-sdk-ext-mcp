@@ -244,7 +244,7 @@ describe('import_records_xml tool', () => {
   })
 
   describe('error handling', () => {
-    it('should return isError when import fails', async () => {
+    it('should return isError when import throws', async () => {
       mockImportRecords.mockRejectedValue(new Error('CSRF token failure'))
 
       const result = await client.callTool({
@@ -259,6 +259,26 @@ describe('import_records_xml tool', () => {
       const text = (result.content as any[])[0].text
       expect(text).toContain('Error importing records')
       expect(text).toContain('CSRF token failure')
+    })
+
+    it('should return isError when result.success is false', async () => {
+      mockImportRecords.mockResolvedValue({
+        success: false,
+        targetTable: 'incident',
+      })
+
+      const result = await client.callTool({
+        name: 'import_records_xml',
+        arguments: {
+          xml_content: '<xml/>',
+          target_table: 'incident',
+        },
+      })
+
+      expect(result.isError).toBe(true)
+      const text = (result.content as any[])[0].text
+      expect(text).toContain('Import failed')
+      expect(text).toContain('incident')
     })
   })
 })
