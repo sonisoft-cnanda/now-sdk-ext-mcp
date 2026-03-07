@@ -111,6 +111,15 @@ import {
   registerListCatalogItemVariablesTool,
   registerSubmitCatalogRequestTool,
 } from "./tools/catalog.js";
+import {
+  registerExecuteFlowTool,
+  registerExecuteSubflowTool,
+  registerExecuteActionTool,
+  registerGetFlowContextStatusTool,
+  registerGetFlowOutputsTool,
+  registerGetFlowErrorTool,
+  registerCancelFlowTool,
+} from "./tools/flow.js";
 
 const server = new McpServer({
   name: "now-sdk-ext-mcp",
@@ -193,6 +202,13 @@ registerListCatalogCategoriesTool(server);
 registerGetCatalogCategoryTool(server);
 registerListCatalogItemVariablesTool(server);
 registerSubmitCatalogRequestTool(server);
+registerExecuteFlowTool(server);
+registerExecuteSubflowTool(server);
+registerExecuteActionTool(server);
+registerGetFlowContextStatusTool(server);
+registerGetFlowOutputsTool(server);
+registerGetFlowErrorTool(server);
+registerCancelFlowTool(server);
 
 // Prevent the process from crashing silently on unexpected errors.
 // Log to stderr (stdout is reserved for JSON-RPC).

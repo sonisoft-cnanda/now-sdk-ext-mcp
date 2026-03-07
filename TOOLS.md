@@ -2826,3 +2826,300 @@ Record: abc123def456789
 Content Type: text/plain
 Size: 12 bytes
 ```
+
+---
+
+## execute_flow
+
+Execute a ServiceNow Flow Designer flow by scoped name. Runs the flow using `sn_fd.FlowAPI` via a background script.
+
+In **foreground** mode (default), the call blocks until the flow completes and returns outputs directly. In **background** mode, it returns immediately with a context ID — use `get_flow_context_status` to poll, then `get_flow_outputs` or `get_flow_error` to retrieve results.
+
+> **Important:** Flows with approval or wait steps **must** use background mode — foreground mode will fail if the flow enters a waiting state.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `scoped_name` | string | **Yes** | — | Scoped name of the flow (e.g., `"global.my_approval_flow"`, `"x_myapp.incident_escalation"`). |
+| `inputs` | object | No | — | Input name-value pairs to pass to the flow. Keys are the input variable names defined in Flow Designer. |
+| `mode` | string | No | `"foreground"` | `"foreground"` (sync) or `"background"` (async). |
+| `timeout` | number | No | ~30000 | Timeout in milliseconds (foreground mode only). |
+| `quick` | boolean | No | `false` | Skip execution detail records for better performance. |
+| `scope` | string | No | — | Scope context for execution (e.g., `"x_myapp_custom"` or sys_id). |
+
+### Example Usage
+
+```json
+{
+  "name": "execute_flow",
+  "arguments": {
+    "instance": "dev224436",
+    "scoped_name": "global.change__unauthorized__review",
+    "mode": "background"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Flow Execution Result ===
+Success: true
+Type: flow
+Name: global.change__unauthorized__review
+Context ID: a1b2c3d4e5f6789012345678abcdef01
+Execution Date: 2026-03-06 14:30:00
+```
+
+---
+
+## execute_subflow
+
+Execute a ServiceNow Flow Designer subflow by scoped name. Subflows are the reusable building blocks in Flow Designer — this is the primary tool for testing subflows during development.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `scoped_name` | string | **Yes** | — | Scoped name of the subflow (e.g., `"global.create_incident_subflow"`). |
+| `inputs` | object | No | — | Input name-value pairs to pass to the subflow. |
+| `mode` | string | No | `"foreground"` | `"foreground"` (sync) or `"background"` (async). |
+| `timeout` | number | No | ~30000 | Timeout in milliseconds (foreground mode only). |
+| `quick` | boolean | No | `false` | Skip execution detail records for better performance. |
+| `scope` | string | No | — | Scope context for execution. |
+
+### Example Usage
+
+```json
+{
+  "name": "execute_subflow",
+  "arguments": {
+    "instance": "dev224436",
+    "scoped_name": "x_myapp.create_incident_subflow",
+    "inputs": {
+      "short_description": "Server outage detected",
+      "urgency": "1",
+      "impact": "1"
+    }
+  }
+}
+```
+
+### Example Output
+
+```
+=== Flow Execution Result ===
+Success: true
+Type: subflow
+Name: x_myapp.create_incident_subflow
+Context ID: b2c3d4e5f6789012345678abcdef0123
+Execution Date: 2026-03-06 14:32:00
+
+Outputs:
+{
+  "incident_sys_id": "abc123def456789",
+  "incident_number": "INC0012345"
+}
+```
+
+---
+
+## execute_action
+
+Execute a ServiceNow Flow Designer action by scoped name. Actions are the lowest-level building blocks in Flow Designer (e.g., lookup record, create task, send notification).
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `scoped_name` | string | **Yes** | — | Scoped name of the action (e.g., `"global.should_send_notification"`). |
+| `inputs` | object | No | — | Input name-value pairs to pass to the action. |
+| `mode` | string | No | `"foreground"` | `"foreground"` (sync) or `"background"` (async). |
+| `timeout` | number | No | ~30000 | Timeout in milliseconds (foreground mode only). |
+| `quick` | boolean | No | `false` | Skip execution detail records for better performance. |
+| `scope` | string | No | — | Scope context for execution. |
+
+### Example Usage
+
+```json
+{
+  "name": "execute_action",
+  "arguments": {
+    "instance": "dev224436",
+    "scoped_name": "global.should_send_notification",
+    "mode": "foreground"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Flow Execution Result ===
+Success: true
+Type: action
+Name: global.should_send_notification
+Context ID: c3d4e5f6789012345678abcdef012345
+Execution Date: 2026-03-06 14:33:00
+
+Outputs:
+{
+  "send_va": "true"
+}
+```
+
+---
+
+## get_flow_context_status
+
+Query the current status of a flow execution by its context ID. Use this to poll background flow executions started with `execute_flow`, `execute_subflow`, or `execute_action` in background mode.
+
+Possible states: `QUEUED`, `IN_PROGRESS`, `WAITING`, `COMPLETE`, `CANCELLED`, `ERROR`.
+
+Typical pattern: execute in background -> poll this tool every few seconds -> once `COMPLETE`, call `get_flow_outputs`. If `ERROR`, call `get_flow_error`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `context_id` | string | **Yes** | — | The flow context sys_id from the execution result's `contextId` field. |
+
+### Example Usage
+
+```json
+{
+  "name": "get_flow_context_status",
+  "arguments": {
+    "instance": "dev224436",
+    "context_id": "a1b2c3d4e5f6789012345678abcdef01"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Flow Context Status ===
+Context ID: a1b2c3d4e5f6789012345678abcdef01
+Found: true
+State: WAITING
+Name: Change - Unauthorized - Review
+Started: 2026-03-06 14:30:00
+```
+
+---
+
+## get_flow_outputs
+
+Retrieve outputs from a completed flow/subflow/action execution by its context ID. Only call this after `get_flow_context_status` shows `COMPLETE`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `context_id` | string | **Yes** | — | The flow context sys_id from the execution result's `contextId` field. |
+
+### Example Usage
+
+```json
+{
+  "name": "get_flow_outputs",
+  "arguments": {
+    "instance": "dev224436",
+    "context_id": "a1b2c3d4e5f6789012345678abcdef01"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Flow Outputs ===
+Context ID: a1b2c3d4e5f6789012345678abcdef01
+Success: true
+
+Outputs:
+{
+  "result_value": "approved",
+  "approver": "admin"
+}
+```
+
+---
+
+## get_flow_error
+
+Retrieve the error message from a failed flow execution by its context ID. Call this after `get_flow_context_status` shows `ERROR` to understand why the flow failed.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `context_id` | string | **Yes** | — | The flow context sys_id from the execution result's `contextId` field. |
+
+### Example Usage
+
+```json
+{
+  "name": "get_flow_error",
+  "arguments": {
+    "instance": "dev224436",
+    "context_id": "a1b2c3d4e5f6789012345678abcdef01"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Flow Error ===
+Context ID: a1b2c3d4e5f6789012345678abcdef01
+Success: true
+
+Flow Error Message:
+The flow "global.my_flow" failed at step 3: Invalid record sys_id provided
+```
+
+---
+
+## cancel_flow
+
+Cancel a running or paused flow execution by its context ID. Use this to stop a background flow that is no longer needed, is stuck in a waiting state, or was started by mistake.
+
+> **Warning:** This is a destructive operation — the flow will be permanently cancelled and cannot be resumed.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `context_id` | string | **Yes** | — | The flow context sys_id from the execution result's `contextId` field. |
+| `reason` | string | No | `"Cancelled via FlowManager"` | Reason for cancellation. |
+
+### Example Usage
+
+```json
+{
+  "name": "cancel_flow",
+  "arguments": {
+    "instance": "dev224436",
+    "context_id": "a1b2c3d4e5f6789012345678abcdef01",
+    "reason": "No longer needed - test completed"
+  }
+}
+```
+
+### Example Output
+
+```
+=== Flow Cancellation ===
+Context ID: a1b2c3d4e5f6789012345678abcdef01
+Success: true
+```
