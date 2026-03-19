@@ -1,0 +1,23 @@
+#!/bin/sh
+#
+# Pre-commit hook: scan staged changes for leaked secrets.
+#
+# Install: git config core.hooksPath .githooks
+
+# --- Gitleaks: scan staged changes for secrets ---
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+GITLEAKS="$REPO_ROOT/.bin/gitleaks"
+
+if [ -x "$GITLEAKS" ]; then
+    "$GITLEAKS" git --pre-commit --staged --redact --config="$REPO_ROOT/.gitleaks.toml"
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "ERROR: gitleaks detected secrets in staged changes. Commit aborted."
+        echo "       Review the findings above and remove any credentials before committing."
+        echo ""
+        exit 1
+    fi
+else
+    echo "WARNING: gitleaks not found at $GITLEAKS — skipping secret scan."
+    echo "         Run 'sh scripts/setup-gitleaks.sh' to install it."
+fi

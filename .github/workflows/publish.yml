@@ -1,0 +1,96 @@
+name: Publish to npm
+
+on:
+  # Manual trigger only — use the "Run workflow" button in GitHub Actions.
+  # Requires the "npm" environment approval (configured in repo settings).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "npm dist-tag"
+        required: false
+        type: choice
+        default: latest
+        options:
+          - latest
+          - next
+          - beta
+          - alpha
+      dry-run:
+        description: "Dry run (validate without publishing)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Determine dist-tag and check version
+        id: dist-tag
+        run: |
+          VERSION=$(node -e 'console.log(require("./package.json").version)')
+          PACKAGE_NAME=$(node -e 'console.log(require("./package.json").name)')
+
+          # Check if this version already exists on npm
+          if npm view "${PACKAGE_NAME}@${VERSION}" version 2>/dev/null; then
+            echo "Version ${VERSION} already exists on npm — skipping publish."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          elif echo "$VERSION" | grep -qE "(alpha|beta|rc|next)"; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Publish (dry run)
+        if: inputs.dry-run == true && steps.dist-tag.outputs.skip != 'true'
+        run: npm publish --tag "${{ steps.dist-tag.outputs.tag }}" --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish
+        if: inputs.dry-run != true && steps.dist-tag.outputs.skip != 'true'
+        run: npm publish --tag "${{ steps.dist-tag.outputs.tag }}" --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        if: inputs.dry-run != true && steps.dist-tag.outputs.skip != 'true'
+        run: echo "Published @sonisoft/now-sdk-ext-mcp@${{ steps.dist-tag.outputs.version }} with tag '${{ steps.dist-tag.outputs.tag }}'" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dry run summary
+        if: inputs.dry-run == true && steps.dist-tag.outputs.skip != 'true'
+        run: echo "Dry run — validated @sonisoft/now-sdk-ext-mcp@${{ steps.dist-tag.outputs.version }} with tag '${{ steps.dist-tag.outputs.tag }}' (no publish performed)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Skip summary
+        if: steps.dist-tag.outputs.skip == 'true'
+        run: echo "Skipped — @sonisoft/now-sdk-ext-mcp@${{ steps.dist-tag.outputs.version }} already exists on npm" >> "$GITHUB_STEP_SUMMARY"

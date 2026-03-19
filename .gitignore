@@ -1,0 +1,13 @@
+node_modules/
+dist/
+tsconfig.tsbuildinfo
+coverage/
+logs/
+*.log
+.DS_Store
+junit.xml
+.mcp.json
+.vscode/mcp.json
+
+# Gitleaks binary
+.bin/

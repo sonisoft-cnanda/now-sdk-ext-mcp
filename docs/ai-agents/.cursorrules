@@ -1,0 +1,229 @@
+# NEX MCP Server Rules — ServiceNow Platform Automation
+
+You have access to the `now-sdk-ext-mcp` MCP server for ServiceNow platform operations. Use these rules when interacting with ServiceNow instances.
+
+## Authentication
+
+Every tool accepts an optional `instance` parameter (auth alias). If omitted, the `SN_AUTH_ALIAS` environment variable is used. If neither is available, the tool returns an error.
+
+## Encoded Query Syntax
+
+Most query tools accept a `query` parameter using ServiceNow encoded query format:
+
+- `=`, `!=`, `>`, `<`, `>=`, `<=` — comparisons
+- `LIKE`, `STARTSWITH`, `ENDSWITH` — string matching
+- `IN`, `NOT IN` — list membership: `stateIN1,2,3`
+- `ISEMPTY`, `ISNOTEMPTY` — null checks
+- `INSTANCEOF` — table hierarchy: `sys_class_nameINSTANCEOFtask`
+- `^` — AND: `active=true^priority=1`
+- `^OR` — OR: `priority=1^ORpriority=2`
+- `ORDERBY<field>` / `ORDERBYDESC<field>` — sorting
+
+## Tool Reference
+
+### Query & Data
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `query_table` | Query any table | `table`, `query`, `fields`, `limit`, `display_value` |
+| `count_records` | Count records (efficient) | `table`, `query` |
+| `aggregate_query` | Stats (AVG/MIN/MAX/SUM) | `table`, `count`, `avg_fields`, `sum_fields` |
+| `aggregate_grouped` | Grouped aggregates | `table`, `group_by`, `count`, `having` |
+| `query_syslog` | Query system logs | `level`, `source`, `limit` |
+
+### Schema & Discovery
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `lookup_table` | Search for tables | `search_term` |
+| `lookup_columns` | List table columns | `table`, `search_term` |
+| `discover_table_schema` | Full table schema | `table`, `include_choices`, `include_business_rules` |
+| `explain_field` | Explain a field | `table`, `field` |
+| `list_instance_tables` | List tables | `name_prefix`, `scope` |
+| `list_plugins` | List plugins | `name_prefix`, `active_only` |
+
+### Script Execution
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `execute_script` | Run JS via Scripts - Background | `script`, `scope` (default: global), `params` |
+
+Full GlideSystem API: GlideRecord, GlideAggregate, GlideDateTime, gs.print(), etc. Output via `gs.print()`.
+
+Parameter substitution: use `${key}` in script, pass `params: { key: "value" }`.
+
+### Flow Designer (11 tools)
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `execute_flow` | Execute published flow | `scoped_name`, `inputs`, `mode` (foreground/background) |
+| `execute_subflow` | Execute published subflow | `scoped_name`, `inputs`, `mode` |
+| `execute_action` | Execute flow action | `scoped_name`, `inputs`, `mode` |
+| `test_flow` | Test unpublished flow | `flow_id`, `output_map` |
+| `copy_flow` | Copy flow to target scope | `source_flow_id`, `name`, `target_scope` |
+| `get_flow_context_status` | Quick state check | `context_id` |
+| `get_flow_execution_details` | Per-action breakdown | `context_id` |
+| `get_flow_logs` | Execution log entries | `context_id`, `limit`, `order_direction` |
+| `get_flow_outputs` | Get flow outputs | `context_id` |
+| `get_flow_error` | Get error details | `context_id` |
+| `cancel_flow` | Cancel execution | `context_id`, `reason` |
+
+### Flow Diagnostic Decision Tree
+
+| Question | Tool |
+|----------|------|
+| Did it succeed? | `get_flow_context_status` |
+| What did each action do? | `get_flow_execution_details` |
+| Why did it fail? | `get_flow_execution_details` then `get_flow_logs` |
+| What outputs? | `get_flow_outputs` |
+| Error message? | `get_flow_error` |
+| Debug trail | `get_flow_logs` with `order_direction: "asc"` |
+
+### Code & Scripts
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `code_search` | Search platform code | `term`, `search_group`, `table` |
+| `list_code_search_groups` | List search groups | |
+| `list_code_search_tables` | List tables in group | `search_group` |
+| `add_code_search_table` | Add table to group | `table`, `search_fields`, `search_group` |
+| `pull_script` | Pull script to local | `script_name`, `script_type`, `file_path` |
+| `push_script` | Push to instance | `script_name`, `script_type`, `file_path` |
+
+Script types: `sys_script_include`, `sys_script`, `sys_ui_script`, `sys_ui_action`, `sys_script_client`
+
+### Task Management
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `find_task` | Find task by number | `table`, `number` |
+| `assign_task` | Assign task | `table`, `record_sys_id`, `assigned_to` |
+| `add_task_comment` | Add comment/work note | `table`, `record_sys_id`, `comment`, `is_work_note` |
+| `resolve_incident` | Resolve incident | `sys_id`, `resolution_notes` |
+| `close_incident` | Close incident | `sys_id`, `close_notes` |
+| `approve_change` | Approve change | `sys_id`, `comments` |
+
+### Batch & Bulk Operations (DRY-RUN BY DEFAULT)
+
+Always run `query_update_records` and `query_delete_records` with `confirm: false` first, then `confirm: true`.
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `batch_create_records` | Create multiple records | `operations` (array of {table, data, saveAs}) |
+| `batch_update_records` | Update multiple records | `updates` (array of {table, sysId, data}) |
+| `query_update_records` | Find and update matching | `table`, `query`, `data`, `confirm` |
+| `query_delete_records` | Find and delete matching | `table`, `query`, `confirm` |
+
+### Update Sets
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `get_current_update_set` | Get active update set | |
+| `list_update_sets` | List update sets | `query`, `limit` |
+| `create_update_set` | Create new | `name`, `description` |
+| `set_current_update_set` | Set as active | `name`, `sys_id` |
+| `inspect_update_set` | Inspect components | `sys_id` |
+| `clone_update_set` | Clone with records | `source_sys_id`, `new_name` |
+| `move_update_set_records` | Move records | `target_update_set_id`, `source_update_set` |
+
+### App & Store
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `search_store_apps` | Search store | `tab_context`, `search_key` |
+| `install_store_app` | Install store app | `app_id`, `version` |
+| `update_store_app` | Update store app | `app_id`, `version` |
+| `list_company_apps` | Company repo apps | `scope`, `installed_only` |
+| `install_from_app_repo` | Install from repo | `scope`, `sys_id`, `version` |
+| `publish_to_app_repo` | Publish to repo | `scope`, `sys_id`, `version` |
+
+### Scope
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `get_current_scope` | Get current scope | |
+| `set_current_scope` | Set scope | `app_sys_id` |
+| `list_scoped_apps` | List scoped apps | `query`, `limit` |
+| `lookup_app` | Search apps/plugins | `search_term`, `type` |
+
+### ATF Testing
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `find_atf_tests` | Search ATF tests | `search_term`, `category` |
+| `run_atf_test` | Run single test | `test_sys_id` |
+| `run_atf_test_suite` | Run test suite | `suite_name` or `suite_sys_id` |
+
+### Attachments
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `list_attachments` | List on record | `table`, `record_sys_id` |
+| `get_attachment_info` | Get metadata | `sys_id` |
+| `upload_attachment` | Upload (base64) | `table`, `record_sys_id`, `file_name`, `content_base64` |
+
+### Service Catalog
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `list_catalog_items` | Browse items | `text_search`, `category_sys_id` |
+| `get_catalog_item` | Item details | `sys_id`, `include_variables` |
+| `list_catalog_categories` | Browse categories | `parent_sys_id`, `catalog_sys_id` |
+| `list_catalog_item_variables` | Form fields | `catalog_item_sys_id` |
+| `submit_catalog_request` | Place order | `catalog_item_sys_id`, `variables` |
+
+### Knowledge Management
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `list_knowledge_bases` | List KBs | `active` |
+| `list_kb_categories` | List categories | `knowledge_base_sys_id` |
+| `list_kb_articles` | List articles | `knowledge_base_sys_id`, `workflow_state` |
+| `get_kb_article` | Full content | `sys_id` |
+| `create_kb_article` | Create (draft) | `short_description`, `knowledge_base_sys_id`, `text` |
+| `publish_kb_article` | Publish article | `sys_id` |
+
+### Health, CMDB, Workflow, XML
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `check_instance_health` | Health check | |
+| `get_cmdb_relationships` | CI relationships | `ci_sys_id`, `direction` |
+| `traverse_cmdb_graph` | BFS graph traversal | `ci_sys_id`, `max_depth` |
+| `create_workflow` | Create workflow | `name`, `table`, `activities` |
+| `export_record_xml` | Export XML | `table`, `sys_id` |
+| `import_records_xml` | Import XML | `xml_content`, `target_table` |
+
+## Common Workflows
+
+### Flow Development
+```
+copy_flow → edit → test_flow → get_flow_execution_details → get_flow_logs → iterate
+```
+
+### Query Investigation
+```
+discover_table_schema → lookup_columns → query_table → count_records / aggregate_grouped
+```
+
+### Script Development
+```
+pull_script → edit locally → push_script → execute_script (test)
+```
+
+### Deployment
+```
+create_update_set → set_current_update_set → make changes → inspect_update_set → clone_update_set (backup)
+```
+
+### Task Lifecycle
+```
+find_task → assign_task → add_task_comment → resolve_incident → close_incident
+```
+
+## Key Safety Rules
+
+1. `query_update_records` and `query_delete_records` are DRY-RUN by default. Always preview first with `confirm: false`, then `confirm: true`.
+2. `execute_script` runs code on the instance. Review scripts before execution. Prefer read-only operations.
+3. Always verify the `instance` parameter when working with production.
+4. Use update sets to track configuration changes.

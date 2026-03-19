@@ -1,0 +1,18 @@
+# Gitleaks configuration
+# https://github.com/gitleaks/gitleaks
+
+title = "gitleaks config"
+
+[extend]
+# Use the default gitleaks rules as a base
+useDefault = true
+
+[allowlist]
+# Paths that are safe to ignore (test fixtures, docs with placeholder values, etc.)
+paths = [
+    '''node_modules''',
+    '''dist''',
+    '''coverage''',
+    '''\.bin''',
+    '''package-lock\.json''',
+]
