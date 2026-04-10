@@ -35,6 +35,7 @@ import {
   registerCreateUpdateSetTool,
   registerSetCurrentUpdateSetTool,
   registerInspectUpdateSetTool,
+  registerExportUpdateSetTool,
   registerCloneUpdateSetTool,
   registerMoveUpdateSetRecordsTool,
 } from "./tools/updateset.js";
@@ -155,6 +156,7 @@ registerListUpdateSetsTool(server);
 registerCreateUpdateSetTool(server);
 registerSetCurrentUpdateSetTool(server);
 registerInspectUpdateSetTool(server);
+registerExportUpdateSetTool(server);
 registerAddTaskCommentTool(server);
 registerAssignTaskTool(server);
 registerResolveIncidentTool(server);
