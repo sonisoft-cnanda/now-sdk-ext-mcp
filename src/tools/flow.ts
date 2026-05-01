@@ -1467,7 +1467,7 @@ export function registerGetFlowDefinitionTool(server: McpServer): void {
  *
  * Retrieves the action type (action definition) data for a given flow action
  * sys_id via the ProcessFlow REST API
- * (GET /api/now/processflow/action/action_types/{action_sys_id}).
+ * (GET /api/now/processflow/action/action_types/{action_sys_id}/step_instances).
  * Uses FlowManager.getFlowActions() under the hood.
  *
  * The returned data is the same action type metadata Flow Designer loads when
@@ -1493,7 +1493,7 @@ export function registerGetFlowActionTool(server: McpServer): void {
         "  - What script or steps power this action?\n" +
         "  - What category / scope is this action in?\n\n" +
         "Calls the ProcessFlow REST API " +
-        "(GET /api/now/processflow/action/action_type/{action_sys_id}). " +
+        "(GET /api/now/processflow/action/action_type/{action_sys_id}/step_instances). " +
         "The action_sys_id usually comes from sys_hub_action_type_base, or " +
         "from the actionTypeSysId field on an actionInstance returned by " +
         "get_flow_definition.",
