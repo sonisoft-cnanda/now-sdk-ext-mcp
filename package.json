@@ -43,11 +43,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "@servicenow/sdk": "4.3.0",
-    "@servicenow/sdk-cli": "4.3.0",
-    "@servicenow/sdk-cli-core": "3.0.2",
-    "@servicenow/sdk-core": "4.3.0",
-    "@sonisoft/now-sdk-ext-core": "3.9.0",
+    "@servicenow/sdk": "4.9.2",
+    "@servicenow/sdk-cli": "4.9.2",
+    "@servicenow/sdk-cli-core": "3.0.3",
+    "@servicenow/sdk-core": "4.9.2",
+    "@sonisoft/now-sdk-ext-core": "^3.9.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
