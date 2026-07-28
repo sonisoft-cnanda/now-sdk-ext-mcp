@@ -6,7 +6,7 @@ on:
 
 jobs:
   ci:
-    name: Lint, Build & Test (Node ${{ matrix.node-version }})
+    name: Lint, Build & Test
     runs-on: ubuntu-latest
 
     strategy:
