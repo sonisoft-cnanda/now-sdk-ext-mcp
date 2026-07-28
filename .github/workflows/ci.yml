@@ -6,21 +6,18 @@ on:
 
 jobs:
   ci:
-    name: Lint, Build & Test (Node ${{ matrix.node-version }})
+    name: Lint, Build & Test
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [22]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: .node-version
 
       - name: Install dependencies
         run: npm ci
