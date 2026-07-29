@@ -9,7 +9,7 @@ This is a TypeScript MCP server built on `@modelcontextprotocol/sdk` (v1.x). It 
 ## Architecture
 
 - **Framework**: `@modelcontextprotocol/sdk` v1.x (official MCP TypeScript SDK)
-- **Core Library**: `@sonisoft/now-sdk-ext-core` v3.9.0 — provides all ServiceNow communication (auth, HTTP, WebSocket, script execution, ATF, syslog, etc.)
+- **Core Library**: `@sonisoft/now-sdk-ext-core` v5.0.1 — provides all ServiceNow communication (auth, HTTP, WebSocket, script execution, ATF, syslog, etc.)
 - **Transport**: stdio (standard for local MCP servers used by Claude Desktop, VS Code, Cursor, etc.)
 - **Auth**: Instance resolution follows a fallback chain: tool `instance` parameter → `SN_AUTH_ALIAS` env var. If the user says "on my myinstance instance", the AI passes `instance: "myinstance"`. If no instance is mentioned, the env var is used. The connection manager in `src/common/connection.ts` resolves the alias to credentials via `@servicenow/sdk-cli`'s credential store and caches instances per alias.
 
