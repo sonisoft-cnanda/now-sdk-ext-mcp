@@ -62,9 +62,24 @@ export async function getServiceNowInstance(
 
   const credential = await getCredentials(resolvedAlias);
   if (!credential) {
+    // The previous text told users to run "snc configure", which is not a
+    // command this SDK has ever shipped — so the one actionable line in the
+    // error sent them nowhere.
+    //
+    // Distinguish the two causes, because from here they look identical: with
+    // the shim inactive, a null credential usually means the keyring could not
+    // be unlocked (KeyChain.getPassword() swallows that and returns null)
+    // rather than that the alias is missing. An MCP server is always launched
+    // non-interactively, so that is the likelier of the two.
+    const shimActive = process.env.NOW_SDK_KEYCHAIN_PATCHED === "1";
     throw new Error(
       `No credentials found for auth alias "${resolvedAlias}". ` +
-        `Run "snc configure --auth ${resolvedAlias}" to set up credentials.`
+        (shimActive
+          ? `Run "nex auth list" to see stored aliases, or ` +
+            `"now-sdk-x auth --add <instance>" to add one.`
+          : `The headless credential store is not active, so the SDK is reading ` +
+            `the OS keyring, which this process cannot unlock. Check that ` +
+            `SN_CRED_STORE_DISABLE is unset, then run "nex auth doctor".`)
     );
   }
 

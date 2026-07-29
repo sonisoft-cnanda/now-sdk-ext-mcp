@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+// FIRST, deliberately: redirect SDK credential storage off the OS keyring before
+// anything can read credentials. An MCP server is always launched as a
+// non-interactive child process, where the keyring cannot be unlocked.
+import "./common/credstore-boot.js";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerExecuteScriptTool } from "./tools/execute-script.js";
