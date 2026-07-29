@@ -68,10 +68,10 @@ Every tool that interacts with a ServiceNow instance should include an optional 
 | Variable | Default | Description |
 |---|---|---|
 | `SN_AUTH_ALIAS` | _(none)_ | Default auth alias used when the tool's `instance` parameter is omitted |
+| `SN_CRED_STORE_ENABLE` | _(unset)_ | Opt in to `@sonisoft/sn-credstore` instead of the OS keyring |
+| `SN_CRED_STORE_DISABLE` | _(unset)_ | Hard off switch; wins over `SN_CRED_STORE_ENABLE` |
 | `SN_CRED_STORE` | `systemd-creds` | Credential store backend: `systemd-creds`, `file`, or `auto` |
 | `SN_CRED_STORE_PATH` | _(XDG state dir)_ | Override the credential store location |
-| `SN_CRED_STORE_REQUIRE` | _(unset)_ | Refuse to start if `@sonisoft/sn-credstore` is not installed |
-| `SN_CRED_STORE_DISABLE` | _(unset)_ | Disable the shim and read the OS keyring instead |
 | `SN_CRED_STORE_DEBUG` | _(unset)_ | Verbose credential-store diagnostics on stderr |
 
 ## Credential Storage
@@ -81,11 +81,12 @@ unlock the OS keyring that `now-sdk` stores credentials in — and the failure i
 silent, because `KeyChain.getPassword()` swallows the error and returns `null`.
 Every tool call then reports "no credentials" regardless of what is stored.
 
-`src/common/credstore-boot.ts` is imported first by `src/index.ts` and redirects
-the SDK's credential storage to `@sonisoft/sn-credstore`, a headless-safe store
-several concurrent processes can share. If that package is not installed the
-server still starts on the keyring path; set `SN_CRED_STORE_REQUIRE=1` to make
-that fatal instead.
+`src/common/credstore-boot.ts` is imported first by `src/index.ts`. It does
+nothing unless `SN_CRED_STORE_ENABLE=1` is set in the server's `env` block, in
+which case it redirects the SDK's credential storage to `@sonisoft/sn-credstore`,
+a headless-safe store several concurrent processes can share. Opting in is the
+usual choice for this server; the default stays on the keyring so behaviour is
+unchanged for anyone who has not asked.
 
 The boot module writes only to **stderr** — stdout is the JSON-RPC transport, and
 a non-protocol byte there breaks the client's parser.

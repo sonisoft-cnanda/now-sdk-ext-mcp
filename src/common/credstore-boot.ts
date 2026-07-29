@@ -1,20 +1,23 @@
 /**
- * Redirect ServiceNow SDK credential storage off the OS keyring.
+ * Opt in to headless-safe credential storage.
  *
- * This matters more for the MCP server than for anything else in the stack: it
- * is started by an MCP client (Claude Code, an IDE) as a non-interactive child
- * process, which is precisely the session that cannot unlock the keyring. The
- * SDK's `KeyChain.getPassword()` swallows the failure and returns null, so every
- * tool call reports "no credentials" instead of a keyring error.
+ * By default this server uses the ServiceNow SDK exactly as it ships, reading
+ * credentials from the OS keyring. Set SN_CRED_STORE_ENABLE=1 in the server's
+ * `env` block to read from @sonisoft/sn-credstore instead.
+ *
+ * That option matters more here than anywhere else in the stack: an MCP server is
+ * started by its client (Claude Code, an IDE) as a non-interactive child process,
+ * which is precisely the session that cannot unlock the keyring. The SDK's
+ * `KeyChain.getPassword()` swallows the failure and returns null, so every tool
+ * call reports "no credentials" instead of a keyring error. If the client's
+ * desktop session happens to have an unlocked keyring the default works fine —
+ * which is why this is a choice rather than a default.
  *
  * Imported for its side effect by src/index.ts, before anything else.
  *
  * The import is dynamic because @sonisoft/sn-credstore is not published yet, and
  * a static import of a missing package is an unrecoverable module-resolution
- * error — it would stop the server from starting at all. Once published and
- * added to dependencies this file collapses to:
- *
- *     import '@sonisoft/sn-credstore/register'
+ * error — it would stop the server from starting at all.
  */
 
 /** Absence is normal today. A shim that loads and then fails is not. */
@@ -29,10 +32,39 @@ function isNotInstalled(error: unknown): boolean {
   );
 }
 
-try {
-  await import("@sonisoft/sn-credstore/register");
-} catch (error) {
-  if (!isNotInstalled(error)) {
+/**
+ * True when the operator asked for the credential store.
+ *
+ * There are no CLI flags here — an MCP server is configured through the `env`
+ * block of its client's config — so this is env-only. SN_CRED_STORE_DISABLE wins
+ * over everything, so one variable always switches it off.
+ */
+function credStoreRequested(): boolean {
+  if (process.env.SN_CRED_STORE_DISABLE) return false;
+  return Boolean(process.env.SN_CRED_STORE_ENABLE);
+}
+
+if (!credStoreRequested()) {
+  if (process.env.SN_CRED_STORE_DEBUG) {
+    process.stderr.write(
+      "now-sdk-ext-mcp: credential store not requested — using the SDK keyring\n"
+    );
+  }
+} else {
+  try {
+    await import("@sonisoft/sn-credstore/register");
+  } catch (error) {
+    if (isNotInstalled(error)) {
+      // Asked for explicitly and not available. Falling back to the keyring is
+      // the one thing the operator just said not to do, and this process cannot
+      // unlock it anyway.
+      process.stderr.write(
+        `now-sdk-ext-mcp: SN_CRED_STORE_ENABLE is set but @sonisoft/sn-credstore is not installed.\n` +
+          `\nRemediation: npm install -g @sonisoft/sn-credstore\n`
+      );
+      process.exit(1);
+    }
+
     // Installed but unable to patch. Continuing would silently fall back to the
     // keyring, and the SDK's next write reseeds from a failed read — wiping
     // every other alias. Refusing to start is the safe outcome.
@@ -42,25 +74,11 @@ try {
     const message = error instanceof Error ? error.message : String(error);
     const remediation = (error as { remediation?: string })?.remediation;
     process.stderr.write(
-      `now-sdk-ext-mcp: the credential shim failed to install: ${message}\n` +
+      `now-sdk-ext-mcp: the credential store failed to initialise: ${message}\n` +
         (remediation ? `\nRemediation: ${remediation}\n` : "") +
-        `\nTo start anyway using the OS keyring, set SN_CRED_STORE_DISABLE=1.\n`
+        `\nTo start against the OS keyring instead, unset SN_CRED_STORE_ENABLE.\n`
     );
     process.exit(1);
-  }
-
-  if (process.env.SN_CRED_STORE_REQUIRE) {
-    process.stderr.write(
-      `now-sdk-ext-mcp: SN_CRED_STORE_REQUIRE is set but @sonisoft/sn-credstore is not installed.\n` +
-        `\nRemediation: npm install @sonisoft/sn-credstore (or npm link it for local development).\n`
-    );
-    process.exit(1);
-  }
-
-  if (process.env.SN_CRED_STORE_DEBUG) {
-    process.stderr.write(
-      "now-sdk-ext-mcp: @sonisoft/sn-credstore not installed — using the SDK keyring\n"
-    );
   }
 }
 
