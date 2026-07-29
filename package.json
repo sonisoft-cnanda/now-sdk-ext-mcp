@@ -48,6 +48,7 @@
     "@servicenow/sdk-cli-core": "3.0.3",
     "@servicenow/sdk-core": "4.9.2",
     "@sonisoft/now-sdk-ext-core": "^5.0.1",
+    "@sonisoft/sn-credstore": "^1.0.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
