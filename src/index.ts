@@ -35,6 +35,7 @@ import {
   registerCreateUpdateSetTool,
   registerSetCurrentUpdateSetTool,
   registerInspectUpdateSetTool,
+  registerExportUpdateSetTool,
   registerCloneUpdateSetTool,
   registerMoveUpdateSetRecordsTool,
 } from "./tools/updateset.js";
@@ -123,6 +124,8 @@ import {
   registerCopyFlowTool,
   registerGetFlowExecutionDetailsTool,
   registerGetFlowLogsTool,
+  registerGetFlowDefinitionTool,
+  registerGetFlowActionTool,
 } from "./tools/flow.js";
 
 const server = new McpServer({
@@ -155,6 +158,7 @@ registerListUpdateSetsTool(server);
 registerCreateUpdateSetTool(server);
 registerSetCurrentUpdateSetTool(server);
 registerInspectUpdateSetTool(server);
+registerExportUpdateSetTool(server);
 registerAddTaskCommentTool(server);
 registerAssignTaskTool(server);
 registerResolveIncidentTool(server);
@@ -217,6 +221,8 @@ registerTestFlowTool(server);
 registerCopyFlowTool(server);
 registerGetFlowExecutionDetailsTool(server);
 registerGetFlowLogsTool(server);
+registerGetFlowDefinitionTool(server);
+registerGetFlowActionTool(server);
 
 // Prevent the process from crashing silently on unexpected errors.
 // Log to stderr (stdout is reserved for JSON-RPC).

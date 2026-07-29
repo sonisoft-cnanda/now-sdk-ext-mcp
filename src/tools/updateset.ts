@@ -405,6 +405,72 @@ export function registerInspectUpdateSetTool(server: McpServer): void {
 }
 
 /**
+ * Registers the export_update_set tool on the MCP server.
+ *
+ * Exports an update set as ServiceNow unload XML via the instance export flow.
+ */
+export function registerExportUpdateSetTool(server: McpServer): void {
+  server.registerTool(
+    "export_update_set",
+    {
+      title: "Export Update Set",
+      description:
+        "Export an update set as ServiceNow unload XML. " +
+        "Uses the same server-side export path as the UI (background export + download). " +
+        "The XML can be imported into another instance or kept as a backup.\n\n" +
+        "IMPORTANT: The response may be large for big update sets.",
+      inputSchema: {
+        instance: z
+          .string()
+          .optional()
+          .describe(
+            "The ServiceNow instance auth alias to connect to. " +
+            "This is the alias configured via `snc configure` (e.g., " +
+            '"myinstance", "prod", "test"). The user will typically refer to ' +
+            "this by name when saying things like \"on my myinstance instance\". " +
+            "If not provided, falls back to the SN_AUTH_ALIAS environment variable."
+          ),
+        sys_id: z
+          .string()
+          .describe("The sys_id of the update set to export."),
+      },
+    },
+    async ({ instance, sys_id }) => {
+      try {
+        const xml = await withConnectionRetry(instance, async (snInstance) => {
+          const manager = new UpdateSetManager(snInstance);
+          return await manager.exportUpdateSet(sys_id);
+        });
+
+        const summary =
+          `Exported update set ${sys_id} — ${Buffer.byteLength(xml, "utf8")} bytes of XML`;
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: summary + "\n\n" + xml,
+            },
+          ],
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error exporting update set: ${message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+}
+
+/**
  * Registers the clone_update_set tool on the MCP server.
  *
  * Clones an update set by creating a new update set and copying all records from the source.

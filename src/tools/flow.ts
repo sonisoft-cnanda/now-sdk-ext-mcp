@@ -6,6 +6,8 @@ import {
   type FlowCopyResult,
   type FlowContextDetailsResult,
   type FlowLogResult,
+  type FlowDefinitionResult,
+  type FlowActionResult,
 } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
 
@@ -1184,3 +1186,396 @@ export function registerGetFlowLogsTool(server: McpServer): void {
     }
   );
 }
+
+
+// ============================================================
+// Helper: format FlowDefinitionResult for get_flow_definition
+// ============================================================
+
+/** Loose shape of an input/output entry on a trigger / action / logic block. */
+interface FlowParamEntry {
+  name?: string;
+  value?: unknown;
+  displayValue?: unknown;
+  parameter?: {
+    label?: string;
+    type?: string;
+    mandatory?: boolean;
+  };
+}
+
+/** Loose shape of a trigger instance from triggerInstances[]. */
+interface FlowTriggerInstance {
+  id?: string;
+  name?: string;
+  type?: string;
+  triggerType?: string;
+  comment?: string;
+  inputs?: FlowParamEntry[];
+}
+
+/** Loose shape of an action instance from actionInstances[]. */
+interface FlowActionInstance {
+  id?: string;
+  order?: string;
+  name?: string;
+  internalName?: string;
+  comment?: string;
+  parent?: string;
+  uiUniqueIdentifier?: string;
+  actionTypeSysId?: string;
+  actionType?: { name?: string; label?: string };
+  inputs?: FlowParamEntry[];
+}
+
+/** Loose shape of a flow logic instance from flowLogicInstances[]. */
+interface FlowLogicInstance {
+  id?: string;
+  order?: string;
+  comment?: string;
+  parent?: string;
+  uiUniqueIdentifier?: string;
+  flowLogicDefinition?: { name?: string; description?: string };
+  inputs?: FlowParamEntry[];
+}
+
+/** Loose shape of a subflow instance from subFlowInstances[]. */
+interface FlowSubflowInstance {
+  id?: string;
+  order?: string;
+  name?: string;
+  internalName?: string;
+  comment?: string;
+  parent?: string;
+  uiUniqueIdentifier?: string;
+  flowSysId?: string;
+  inputs?: FlowParamEntry[];
+}
+
+/** Loose shape of a flow variable / input / output declaration. */
+interface FlowVariable {
+  name?: string;
+  label?: string;
+  type?: string;
+  mandatory?: boolean;
+}
+
+/** Format a single param entry (input on an action / trigger / logic block). */
+function formatParamValue(p: FlowParamEntry): string {
+  const name = p.name ?? "?";
+  const label = p.parameter?.label;
+  const type = p.parameter?.type;
+  const display =
+    p.displayValue !== undefined && p.displayValue !== ""
+      ? p.displayValue
+      : p.value;
+  let displayStr: string;
+  if (display === undefined || display === null || display === "") {
+    displayStr = "(empty)";
+  } else if (
+    typeof display === "string" ||
+    typeof display === "number" ||
+    typeof display === "boolean"
+  ) {
+    displayStr = String(display);
+  } else {
+    displayStr = JSON.stringify(display);
+  }
+  // Truncate excessively long values so a single condition doesn't dominate output.
+  if (displayStr.length > 240) {
+    displayStr = `${displayStr.slice(0, 237)}...`;
+  }
+  const labelPart = label && label !== name ? ` (${label})` : "";
+  const typePart = type ? ` [${type}]` : "";
+  return `${name}${labelPart}${typePart} = ${displayStr}`;
+}
+
+/** Sort steps by numeric `order` (string), with missing orders going last. */
+function compareByOrder(
+  a: { order?: string },
+  b: { order?: string }
+): number {
+  const ao = a.order != null ? parseInt(a.order, 10) : Number.POSITIVE_INFINITY;
+  const bo = b.order != null ? parseInt(b.order, 10) : Number.POSITIVE_INFINITY;
+  if (Number.isNaN(ao)) return 1;
+  if (Number.isNaN(bo)) return -1;
+  return ao - bo;
+}
+
+/** Build a lookup from a logic block / action `uiUniqueIdentifier` to its label. */
+function buildParentLabelLookup(
+  actions: FlowActionInstance[],
+  logic: FlowLogicInstance[],
+  subflows: FlowSubflowInstance[]
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const a of actions) {
+    if (a.uiUniqueIdentifier) {
+      map.set(
+        a.uiUniqueIdentifier,
+        a.actionType?.name ?? a.name ?? a.internalName ?? "Action"
+      );
+    }
+  }
+  for (const l of logic) {
+    if (l.uiUniqueIdentifier) {
+      map.set(l.uiUniqueIdentifier, l.flowLogicDefinition?.name ?? "Logic");
+    }
+  }
+  for (const s of subflows) {
+    if (s.uiUniqueIdentifier) {
+      map.set(s.uiUniqueIdentifier, s.name ?? s.internalName ?? "Subflow");
+    }
+  }
+  return map;
+}
+
+// ============================================================
+// 12. get_flow_definition
+// ============================================================
+
+/**
+ * Registers the get_flow_definition MCP tool.
+ *
+ * Retrieves the full flow definition for a given flow sys_id via the
+ * ProcessFlow REST API (GET /api/now/processflow/flow/{flow_sys_id}).
+ * Uses FlowManager.getFlowDefinition() under the hood.
+ *
+ * The returned definition is the same JSON snapshot Flow Designer loads
+ * when opening a flow — it contains the trigger, action instances,
+ * subflow instances, logic blocks (if/for/etc.), data pills, stages,
+ * inputs, outputs, scope, and metadata.
+ *
+ * @param server - The McpServer instance to register the tool on
+ */
+export function registerGetFlowDefinitionTool(server: McpServer): void {
+  server.registerTool(
+    "get_flow_definition",
+    {
+      title: "Get Flow Definition",
+      description:
+        "Fetch the full Flow Designer flow definition JSON for a given flow. " +
+        "Returns the same definition snapshot Flow Designer loads when opening " +
+        "the flow — including trigger, action instances, subflow instances, " +
+        "logic blocks, data pills, stages, inputs, outputs, scope, and metadata.\n\n" +
+        "Use this tool to document, explain, or diagram a flow, or to answer " +
+        "questions like:\n" +
+        "  - What does flow <name> do?\n" +
+        "  - What triggers this flow? What table? What conditions?\n" +
+        "  - What actions / subflows / logic blocks does the flow run?\n" +
+        "  - What inputs/outputs/flow variables does it have?\n" +
+        "  - What encoded query / filter triggers this flow?\n" +
+        "  - What data-pill references exist between steps?\n" +
+        "  - What stages does this flow expose?\n" +
+        "  - Is this flow published, what scope is it in, who updated it last?\n\n" +
+        "Calls the ProcessFlow REST API " +
+        "(GET /api/now/processflow/flow/{flow_sys_id}). The flow does not need " +
+        "to be published.",
+      inputSchema: {
+        instance: z.string().optional().describe(INSTANCE_DESC),
+        flow_sys_id: z
+          .string()
+          .describe(
+            "Flow sys_id (32-char hex) of the flow to fetch. " +
+              "The flow does not need to be published. " +
+              "If you only have a scoped name, look up the sys_id first via " +
+              "the sys_hub_flow table."
+          ),
+        scope: z
+          .string()
+          .optional()
+          .describe(
+            "Scope sys_id for the ProcessFlow API transaction scope query " +
+              "parameter. If omitted, the API uses the default scope."
+          ),
+      },
+    },
+    async ({ instance, flow_sys_id, scope }) => {
+      try {
+        const result = await withConnectionRetry(
+          instance,
+          async (snInstance) => {
+            // Do not pass scope to the FlowManager constructor — that scope
+            // only applies to BackgroundScriptExecutor. getFlowDefinition uses
+            // the ProcessFlow REST API and receives scope via its own parameter.
+            const mgr = new FlowManager(snInstance);
+            return await mgr.getFlowDefinition(flow_sys_id, scope);
+          }
+        );
+
+        // On API failure, surface the error message and any rawResponse the
+        // core SDK captured so the caller has something to debug with.
+        if (!result.success) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    errorMessage:
+                      result.errorMessage ?? "Unknown error from processflow API",
+                    rawResponse: result.rawResponse,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Return the raw ProcessFlow API response exactly as the SDK captured
+        // it. MCP tool results require a `content` array — there is no
+        // "object" content type — so the response is serialized into a text
+        // block. We also publish it via `structuredContent` for clients that
+        // support structured tool output.
+        const rawResponse = (result.rawResponse ?? {}) as Record<string, unknown>;
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(rawResponse, null, 2),
+            },
+          ],
+          structuredContent: rawResponse,
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error getting flow definition: ${message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+}
+
+// ============================================================
+// 13. get_flow_action
+// ============================================================
+
+/**
+ * Registers the get_flow_action MCP tool.
+ *
+ * Retrieves the action type (action definition) data for a given flow action
+ * sys_id via the ProcessFlow REST API
+ * (GET /api/now/processflow/action/action_types/{action_sys_id}/step_instances).
+ * Uses FlowManager.getFlowActions() under the hood.
+ *
+ * The returned data is the same action type metadata Flow Designer loads when
+ * inspecting an action — including the action's inputs, outputs, script,
+ * step configuration, and other metadata.
+ *
+ * @param server - The McpServer instance to register the tool on
+ */
+export function registerGetFlowActionTool(server: McpServer): void {
+  server.registerTool(
+    "get_flow_action",
+    {
+      title: "Get Flow Action",
+      description:
+        "Fetch the Flow Designer action type (action definition) for a given " +
+        "action sys_id. Returns the same action metadata Flow Designer loads " +
+        "when inspecting an action — including inputs, outputs, script, step " +
+        "configuration, category, and other metadata.\n\n" +
+        "Use this tool to document, explain, or diagram an action, or to " +
+        "answer questions like:\n" +
+        "  - What does action <name> do?\n" +
+        "  - What inputs does this action accept? What outputs does it return?\n" +
+        "  - What script or steps power this action?\n" +
+        "  - What category / scope is this action in?\n\n" +
+        "Calls the ProcessFlow REST API " +
+        "(GET /api/now/processflow/action/action_type/{action_sys_id}/step_instances). " +
+        "The action_sys_id usually comes from sys_hub_action_type_base, or " +
+        "from the actionTypeSysId field on an actionInstance returned by " +
+        "get_flow_definition.",
+      inputSchema: {
+        instance: z.string().optional().describe(INSTANCE_DESC),
+        action_sys_id: z
+          .string()
+          .describe(
+            "Action type sys_id (32-char hex) of the action to fetch. " +
+              "This is typically the sys_id from sys_hub_action_type_base, " +
+              "or the actionTypeSysId of an actionInstance returned by " +
+              "get_flow_definition."
+          ),
+        scope: z
+          .string()
+          .optional()
+          .describe(
+            "Scope sys_id for the ProcessFlow API transaction scope query " +
+              "parameter. If omitted, the API uses the default scope."
+          ),
+      },
+    },
+    async ({ instance, action_sys_id, scope }) => {
+      try {
+        const result: FlowActionResult = await withConnectionRetry(
+          instance,
+          async (snInstance) => {
+            // Do not pass scope to the FlowManager constructor — that scope
+            // only applies to BackgroundScriptExecutor. getFlowActions uses
+            // the ProcessFlow REST API and receives scope via its own parameter.
+            const mgr = new FlowManager(snInstance);
+            return await mgr.getFlowActions(action_sys_id, scope);
+          }
+        );
+
+        if (!result.success) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    success: false,
+                    errorMessage:
+                      result.errorMessage ?? "Unknown error from processflow API",
+                    rawResponse: result.rawResponse,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        // Mirror get_flow_definition: return the raw API response as text,
+        // and also publish via structuredContent for clients that support it.
+        const rawResponse = (result.rawResponse ?? {}) as Record<string, unknown>;
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(rawResponse, null, 2),
+            },
+          ],
+          structuredContent: rawResponse,
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error getting flow action: ${message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+}
+
