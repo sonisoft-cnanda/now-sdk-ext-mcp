@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { SchemaDiscovery } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the discover_table_schema tool on the MCP server.
@@ -14,6 +15,7 @@ export function registerDiscoverTableSchemaTool(server: McpServer): void {
   server.registerTool(
     "discover_table_schema",
     {
+      annotations: annotationsFor("discover_table_schema"),
       title: "Discover Table Schema",
       description:
         "Discover the full schema of a ServiceNow table including all fields, types, " +
@@ -205,6 +207,7 @@ export function registerExplainFieldTool(server: McpServer): void {
   server.registerTool(
     "explain_field",
     {
+      annotations: annotationsFor("explain_field"),
       title: "Explain Field",
       description:
         "Get detailed explanation of a specific field on a ServiceNow table, " +
@@ -310,6 +313,7 @@ export function registerValidateCatalogTool(server: McpServer): void {
   server.registerTool(
     "validate_catalog",
     {
+      annotations: annotationsFor("validate_catalog"),
       title: "Validate Catalog Configuration",
       description:
         "Validate a catalog item's configuration on a ServiceNow instance. " +

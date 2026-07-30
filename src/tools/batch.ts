@@ -3,6 +3,7 @@ import { z } from "zod";
 import { BatchOperations } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
 import { progressReporter } from "../common/progress.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the batch_create_records tool on the MCP server.
@@ -14,6 +15,7 @@ export function registerBatchCreateRecordsTool(server: McpServer): void {
   server.registerTool(
     "batch_create_records",
     {
+      annotations: annotationsFor("batch_create_records"),
       title: "Batch Create Records",
       description:
         "Create multiple records across one or more ServiceNow tables in a single batch. " +
@@ -120,6 +122,7 @@ export function registerBatchUpdateRecordsTool(server: McpServer): void {
   server.registerTool(
     "batch_update_records",
     {
+      annotations: annotationsFor("batch_update_records"),
       title: "Batch Update Records",
       description:
         "Update multiple records across one or more ServiceNow tables in a single batch. " +

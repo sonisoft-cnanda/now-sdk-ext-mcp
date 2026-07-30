@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { InstanceHealth, AggregateQuery } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the check_instance_health tool on the MCP server.
@@ -13,6 +14,7 @@ export function registerCheckInstanceHealthTool(server: McpServer): void {
   server.registerTool(
     "check_instance_health",
     {
+      annotations: annotationsFor("check_instance_health"),
       title: "Check Instance Health",
       description:
         "Run a consolidated health check on a ServiceNow instance. Returns version info, " +

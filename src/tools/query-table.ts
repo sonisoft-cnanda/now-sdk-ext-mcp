@@ -5,6 +5,7 @@ import {
   withConnectionRetry,
   isRetryableResponse,
 } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 interface TableResponse {
   result: Record<string, unknown>[];
@@ -19,6 +20,7 @@ export function registerQueryTableTool(server: McpServer): void {
   server.registerTool(
     "query_table",
     {
+      annotations: annotationsFor("query_table"),
       title: "Query ServiceNow Table",
       description:
         "Query any ServiceNow table using the Table API. Returns records matching " +

@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { BackgroundScriptExecutor } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the execute_script tool on the MCP server.
@@ -13,6 +14,7 @@ export function registerExecuteScriptTool(server: McpServer): void {
   server.registerTool(
     "execute_script",
     {
+      annotations: annotationsFor("execute_script"),
       title: "Execute Background Script",
       description:
         "Execute JavaScript on a ServiceNow instance using Scripts - Background " +

@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { TaskOperations } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Instance parameter description shared across all task tools.
@@ -26,6 +27,7 @@ export function registerAddTaskCommentTool(server: McpServer): void {
   server.registerTool(
     "add_task_comment",
     {
+      annotations: annotationsFor("add_task_comment"),
       title: "Add Task Comment",
       description:
         "Add a comment or work note to any task-based record (incident, change_request, " +
@@ -105,6 +107,7 @@ export function registerAssignTaskTool(server: McpServer): void {
   server.registerTool(
     "assign_task",
     {
+      annotations: annotationsFor("assign_task"),
       title: "Assign Task",
       description:
         "Assign a task record to a user and optionally an assignment group. " +
@@ -184,6 +187,7 @@ export function registerResolveIncidentTool(server: McpServer): void {
   server.registerTool(
     "resolve_incident",
     {
+      annotations: annotationsFor("resolve_incident"),
       title: "Resolve Incident",
       description:
         "Resolve an incident by setting state to Resolved (6) with resolution notes. " +
@@ -259,6 +263,7 @@ export function registerCloseIncidentTool(server: McpServer): void {
   server.registerTool(
     "close_incident",
     {
+      annotations: annotationsFor("close_incident"),
       title: "Close Incident",
       description:
         "Close an incident by setting state to Closed (7). " +
@@ -332,6 +337,7 @@ export function registerApproveChangeTool(server: McpServer): void {
   server.registerTool(
     "approve_change",
     {
+      annotations: annotationsFor("approve_change"),
       title: "Approve Change Request",
       description:
         "Approve a change request with optional comments. Sets the approval field to " +
@@ -397,6 +403,7 @@ export function registerFindTaskTool(server: McpServer): void {
   server.registerTool(
     "find_task",
     {
+      annotations: annotationsFor("find_task"),
       title: "Find Task by Number",
       description:
         "Find a task record by its number (e.g., \"INC0010001\", \"CHG0030002\"). " +

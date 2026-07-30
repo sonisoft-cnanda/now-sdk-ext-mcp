@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { InstanceDiscovery } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the list_instance_tables tool on the MCP server.
@@ -13,6 +14,7 @@ export function registerListInstanceTablesTool(server: McpServer): void {
   server.registerTool(
     "list_instance_tables",
     {
+      annotations: annotationsFor("list_instance_tables"),
       title: "List Instance Tables",
       description:
         "List tables on a ServiceNow instance with optional filtering. Returns table name, " +
@@ -142,6 +144,7 @@ export function registerListPluginsTool(server: McpServer): void {
   server.registerTool(
     "list_plugins",
     {
+      annotations: annotationsFor("list_plugins"),
       title: "List Plugins",
       description:
         "List ServiceNow platform plugins on an instance. Returns plugin ID, name, " +

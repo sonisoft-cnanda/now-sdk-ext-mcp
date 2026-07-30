@@ -9,6 +9,7 @@ import {
   BatchInstallation,
 } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the get_app_details tool on the MCP server.
@@ -19,6 +20,7 @@ export function registerGetAppDetailsTool(server: McpServer): void {
   server.registerTool(
     "get_app_details",
     {
+      annotations: annotationsFor("get_app_details"),
       title: "Get Application Details",
       description:
         "Get detailed information about a ServiceNow application by its sys_id. " +
@@ -113,6 +115,7 @@ export function registerValidateAppInstallTool(server: McpServer): void {
   server.registerTool(
     "validate_app_install",
     {
+      annotations: annotationsFor("validate_app_install"),
       title: "Validate Application Installation",
       description:
         "Validate whether a set of applications are installed at the expected versions. " +
@@ -231,6 +234,7 @@ export function registerSearchStoreAppsTool(server: McpServer): void {
   server.registerTool(
     "search_store_apps",
     {
+      annotations: annotationsFor("search_store_apps"),
       title: "Search Store Applications",
       description:
         "Search or browse ServiceNow store applications by category.\n\n" +
@@ -344,6 +348,7 @@ export function registerListCompanyAppsTool(server: McpServer): void {
   server.registerTool(
     "list_company_apps",
     {
+      annotations: annotationsFor("list_company_apps"),
       title: "List Company Applications",
       description:
         "List company-internal applications shared within your organization. " +
@@ -476,6 +481,7 @@ export function registerInstallStoreAppTool(server: McpServer): void {
   server.registerTool(
     "install_store_app",
     {
+      annotations: annotationsFor("install_store_app"),
       title: "Install Store Application",
       description:
         "Install a ServiceNow store application on the target instance. " +
@@ -588,6 +594,7 @@ export function registerUpdateStoreAppTool(server: McpServer): void {
   server.registerTool(
     "update_store_app",
     {
+      annotations: annotationsFor("update_store_app"),
       title: "Update Store Application",
       description:
         "Update an installed ServiceNow store application to a newer version. " +
@@ -699,6 +706,7 @@ export function registerInstallFromAppRepoTool(server: McpServer): void {
   server.registerTool(
     "install_from_app_repo",
     {
+      annotations: annotationsFor("install_from_app_repo"),
       title: "Install from App Repository",
       description:
         "Install an application from the company's ServiceNow application " +
@@ -829,6 +837,7 @@ export function registerPublishToAppRepoTool(server: McpServer): void {
   server.registerTool(
     "publish_to_app_repo",
     {
+      annotations: annotationsFor("publish_to_app_repo"),
       title: "Publish to App Repository",
       description:
         "Publish an application to the company's ServiceNow application " +

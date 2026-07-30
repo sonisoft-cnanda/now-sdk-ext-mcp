@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { KnowledgeManager } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Instance parameter description shared across knowledge tools.
@@ -20,6 +21,7 @@ export function registerListKnowledgeBasesTool(server: McpServer): void {
   server.registerTool(
     "list_knowledge_bases",
     {
+      annotations: annotationsFor("list_knowledge_bases"),
       title: "List Knowledge Bases",
       description:
         "List knowledge bases on a ServiceNow instance. Returns knowledge base records " +
@@ -96,6 +98,7 @@ export function registerGetKnowledgeBaseTool(server: McpServer): void {
   server.registerTool(
     "get_knowledge_base",
     {
+      annotations: annotationsFor("get_knowledge_base"),
       title: "Get Knowledge Base Details",
       description:
         "Get details of a specific knowledge base by sys_id, including the total number " +
@@ -143,6 +146,7 @@ export function registerListKbCategoriesTool(server: McpServer): void {
   server.registerTool(
     "list_kb_categories",
     {
+      annotations: annotationsFor("list_kb_categories"),
       title: "List Knowledge Categories",
       description:
         "List knowledge base categories from the kb_category table. Filter by knowledge " +
@@ -214,6 +218,7 @@ export function registerCreateKbCategoryTool(server: McpServer): void {
   server.registerTool(
     "create_kb_category",
     {
+      annotations: annotationsFor("create_kb_category"),
       title: "Create Knowledge Category",
       description:
         "Create a new category in a knowledge base. Requires a label and the knowledge " +
@@ -274,6 +279,7 @@ export function registerListKbArticlesTool(server: McpServer): void {
   server.registerTool(
     "list_kb_articles",
     {
+      annotations: annotationsFor("list_kb_articles"),
       title: "List Knowledge Articles",
       description:
         "List knowledge article summaries from the kb_knowledge table. Returns lightweight " +
@@ -355,6 +361,7 @@ export function registerGetKbArticleTool(server: McpServer): void {
   server.registerTool(
     "get_kb_article",
     {
+      annotations: annotationsFor("get_kb_article"),
       title: "Get Knowledge Article",
       description:
         "Get the full content of a knowledge article by sys_id, including the HTML body text. " +
@@ -404,6 +411,7 @@ export function registerCreateKbArticleTool(server: McpServer): void {
   server.registerTool(
     "create_kb_article",
     {
+      annotations: annotationsFor("create_kb_article"),
       title: "Create Knowledge Article",
       description:
         "Create a new knowledge article in a specified knowledge base. The article is " +
@@ -503,6 +511,7 @@ export function registerUpdateKbArticleTool(server: McpServer): void {
   server.registerTool(
     "update_kb_article",
     {
+      annotations: annotationsFor("update_kb_article"),
       title: "Update Knowledge Article",
       description:
         "Update an existing knowledge article's fields. Only the fields provided will " +
@@ -593,6 +602,7 @@ export function registerPublishKbArticleTool(server: McpServer): void {
   server.registerTool(
     "publish_kb_article",
     {
+      annotations: annotationsFor("publish_kb_article"),
       title: "Publish Knowledge Article",
       description:
         "Publish a draft knowledge article by setting its workflow_state to 'published'. " +

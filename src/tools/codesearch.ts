@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CodeSearch } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the code_search tool on the MCP server.
@@ -14,6 +15,7 @@ export function registerCodeSearchTool(server: McpServer): void {
   server.registerTool(
     "code_search",
     {
+      annotations: annotationsFor("code_search"),
       title: "Code Search",
       description:
         "Search for code across a ServiceNow instance using the Code Search API. " +
@@ -182,6 +184,7 @@ export function registerListCodeSearchGroupsTool(server: McpServer): void {
   server.registerTool(
     "list_code_search_groups",
     {
+      annotations: annotationsFor("list_code_search_groups"),
       title: "List Code Search Groups",
       description:
         "List available code search groups on a ServiceNow instance. " +
@@ -283,6 +286,7 @@ export function registerListCodeSearchTablesTool(server: McpServer): void {
   server.registerTool(
     "list_code_search_tables",
     {
+      annotations: annotationsFor("list_code_search_tables"),
       title: "List Code Search Tables",
       description:
         "List the tables associated with a code search group. These are the tables " +
@@ -381,6 +385,7 @@ export function registerAddCodeSearchTableTool(server: McpServer): void {
   server.registerTool(
     "add_code_search_table",
     {
+      annotations: annotationsFor("add_code_search_table"),
       title: "Add Code Search Table",
       description:
         "Add a new table to an existing code search group, expanding what gets searched. " +

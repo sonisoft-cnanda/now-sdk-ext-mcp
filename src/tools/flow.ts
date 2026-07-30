@@ -8,6 +8,7 @@ import {
   type FlowLogResult,
 } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Instance parameter description shared across flow tools.
@@ -120,6 +121,7 @@ export function registerExecuteFlowTool(server: McpServer): void {
   server.registerTool(
     "execute_flow",
     {
+      annotations: annotationsFor("execute_flow"),
       title: "Execute Flow",
       description:
         "Execute a published ServiceNow Flow Designer flow by scoped name. " +
@@ -179,6 +181,7 @@ export function registerExecuteSubflowTool(server: McpServer): void {
   server.registerTool(
     "execute_subflow",
     {
+      annotations: annotationsFor("execute_subflow"),
       title: "Execute Subflow",
       description:
         "Execute a ServiceNow Flow Designer subflow by scoped name. " +
@@ -237,6 +240,7 @@ export function registerExecuteActionTool(server: McpServer): void {
   server.registerTool(
     "execute_action",
     {
+      annotations: annotationsFor("execute_action"),
       title: "Execute Action",
       description:
         "Execute a ServiceNow Flow Designer action by scoped name. " +
@@ -294,6 +298,7 @@ export function registerGetFlowContextStatusTool(server: McpServer): void {
   server.registerTool(
     "get_flow_context_status",
     {
+      annotations: annotationsFor("get_flow_context_status"),
       title: "Get Flow Context Status",
       description:
         "Query the current status of a flow execution by its context ID. " +
@@ -365,6 +370,7 @@ export function registerGetFlowOutputsTool(server: McpServer): void {
   server.registerTool(
     "get_flow_outputs",
     {
+      annotations: annotationsFor("get_flow_outputs"),
       title: "Get Flow Outputs",
       description:
         "Retrieve outputs from a completed flow/subflow/action execution by its " +
@@ -433,6 +439,7 @@ export function registerGetFlowErrorTool(server: McpServer): void {
   server.registerTool(
     "get_flow_error",
     {
+      annotations: annotationsFor("get_flow_error"),
       title: "Get Flow Error",
       description:
         "Retrieve the error message from a failed flow execution by its context ID. " +
@@ -539,6 +546,7 @@ export function registerCancelFlowTool(server: McpServer): void {
   server.registerTool(
     "cancel_flow",
     {
+      annotations: annotationsFor("cancel_flow"),
       title: "Cancel Flow",
       description:
         "Cancel a running or paused flow execution by its context ID. " +
@@ -621,6 +629,7 @@ export function registerTestFlowTool(server: McpServer): void {
   server.registerTool(
     "test_flow",
     {
+      annotations: annotationsFor("test_flow"),
       title: "Test Flow (Flow Designer)",
       description:
         "Test a ServiceNow Flow Designer flow without requiring it to be published. " +
@@ -772,6 +781,7 @@ export function registerCopyFlowTool(server: McpServer): void {
   server.registerTool(
     "copy_flow",
     {
+      annotations: annotationsFor("copy_flow"),
       title: "Copy Flow (Flow Designer)",
       description:
         "Copy an existing ServiceNow Flow Designer flow into a target scoped application. " +
@@ -1021,6 +1031,7 @@ export function registerGetFlowExecutionDetailsTool(server: McpServer): void {
   server.registerTool(
     "get_flow_execution_details",
     {
+      annotations: annotationsFor("get_flow_execution_details"),
       title: "Get Flow Execution Details",
       description:
         "Get rich execution details for a flow context: per-action timing, inputs, " +
@@ -1119,6 +1130,7 @@ export function registerGetFlowLogsTool(server: McpServer): void {
   server.registerTool(
     "get_flow_logs",
     {
+      annotations: annotationsFor("get_flow_logs"),
       title: "Get Flow Execution Logs",
       description:
         "Retrieve flow execution log entries from sys_flow_log for a given context.\n\n" +

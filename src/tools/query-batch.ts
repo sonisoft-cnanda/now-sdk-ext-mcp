@@ -3,6 +3,7 @@ import { z } from "zod";
 import { QueryBatchOperations } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
 import { progressReporter } from "../common/progress.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the query_update_records tool on the MCP server.
@@ -14,6 +15,7 @@ export function registerQueryUpdateRecordsTool(server: McpServer): void {
   server.registerTool(
     "query_update_records",
     {
+      annotations: annotationsFor("query_update_records"),
       title: "Query Update Records",
       description:
         "Find records matching an encoded query and update them all with the specified data. " +
@@ -139,6 +141,7 @@ export function registerQueryDeleteRecordsTool(server: McpServer): void {
   server.registerTool(
     "query_delete_records",
     {
+      annotations: annotationsFor("query_delete_records"),
       title: "Query Delete Records",
       description:
         "Find records matching an encoded query and delete them all. " +

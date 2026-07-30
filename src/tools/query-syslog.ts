@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { SyslogReader } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the query_syslog tool on the MCP server.
@@ -13,6 +14,7 @@ export function registerQuerySyslogTool(server: McpServer): void {
   server.registerTool(
     "query_syslog",
     {
+      annotations: annotationsFor("query_syslog"),
       title: "Query Syslog",
       description:
         "Query the ServiceNow system log (syslog) to check for errors, warnings, " +

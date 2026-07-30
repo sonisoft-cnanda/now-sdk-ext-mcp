@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ATFTestExecutor } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the run_atf_test tool on the MCP server.
@@ -13,6 +14,7 @@ export function registerRunAtfTestTool(server: McpServer): void {
   server.registerTool(
     "run_atf_test",
     {
+      annotations: annotationsFor("run_atf_test"),
       title: "Run ATF Test",
       description:
         "Execute a single ServiceNow ATF (Automated Test Framework) test by its sys_id. " +
@@ -115,6 +117,7 @@ export function registerRunAtfTestSuiteTool(server: McpServer): void {
   server.registerTool(
     "run_atf_test_suite",
     {
+      annotations: annotationsFor("run_atf_test_suite"),
       title: "Run ATF Test Suite",
       description:
         "Execute a ServiceNow ATF test suite and wait for all tests to complete. " +

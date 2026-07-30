@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CatalogManager } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Instance parameter description shared across catalog tools.
@@ -20,6 +21,7 @@ export function registerListCatalogItemsTool(server: McpServer): void {
   server.registerTool(
     "list_catalog_items",
     {
+      annotations: annotationsFor("list_catalog_items"),
       title: "List Catalog Items",
       description:
         "List service catalog items from the sc_cat_item table. Supports text search " +
@@ -99,6 +101,7 @@ export function registerGetCatalogItemTool(server: McpServer): void {
   server.registerTool(
     "get_catalog_item",
     {
+      annotations: annotationsFor("get_catalog_item"),
       title: "Get Catalog Item Details",
       description:
         "Get details of a specific service catalog item by sys_id, optionally including " +
@@ -164,6 +167,7 @@ export function registerListCatalogCategoriesTool(server: McpServer): void {
   server.registerTool(
     "list_catalog_categories",
     {
+      annotations: annotationsFor("list_catalog_categories"),
       title: "List Catalog Categories",
       description:
         "List service catalog categories from the sc_category table. Filter by parent " +
@@ -239,6 +243,7 @@ export function registerGetCatalogCategoryTool(server: McpServer): void {
   server.registerTool(
     "get_catalog_category",
     {
+      annotations: annotationsFor("get_catalog_category"),
       title: "Get Catalog Category Details",
       description:
         "Get details of a specific service catalog category by sys_id, including the " +
@@ -286,6 +291,7 @@ export function registerListCatalogItemVariablesTool(server: McpServer): void {
   server.registerTool(
     "list_catalog_item_variables",
     {
+      annotations: annotationsFor("list_catalog_item_variables"),
       title: "List Catalog Item Variables",
       description:
         "List the variables (form fields) for a specific catalog item. Returns variable " +
@@ -359,6 +365,7 @@ export function registerSubmitCatalogRequestTool(server: McpServer): void {
   server.registerTool(
     "submit_catalog_request",
     {
+      annotations: annotationsFor("submit_catalog_request"),
       title: "Submit Catalog Request",
       description:
         "Submit a service catalog request using the ServiceNow order_now API. Returns " +

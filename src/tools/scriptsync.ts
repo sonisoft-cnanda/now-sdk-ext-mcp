@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ScriptSync } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the pull_script tool on the MCP server.
@@ -12,6 +13,7 @@ export function registerPullScriptTool(server: McpServer): void {
   server.registerTool(
     "pull_script",
     {
+      annotations: annotationsFor("pull_script"),
       title: "Pull Script from ServiceNow",
       description:
         "Pull a script (Script Include, Business Rule, UI Script, UI Action, " +
@@ -107,6 +109,7 @@ export function registerPushScriptTool(server: McpServer): void {
   server.registerTool(
     "push_script",
     {
+      annotations: annotationsFor("push_script"),
       title: "Push Script to ServiceNow",
       description:
         "Push a local script file to a ServiceNow instance, updating the script " +

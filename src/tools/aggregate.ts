@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { AggregateQuery } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the count_records tool on the MCP server.
@@ -12,6 +13,7 @@ export function registerCountRecordsTool(server: McpServer): void {
   server.registerTool(
     "count_records",
     {
+      annotations: annotationsFor("count_records"),
       title: "Count Records",
       description:
         "Count records on any ServiceNow table, optionally filtered by an encoded query. " +
@@ -86,6 +88,7 @@ export function registerAggregateQueryTool(server: McpServer): void {
   server.registerTool(
     "aggregate_query",
     {
+      annotations: annotationsFor("aggregate_query"),
       title: "Aggregate Query",
       description:
         "Run aggregate functions (COUNT, AVG, MIN, MAX, SUM) on any ServiceNow table " +
@@ -210,6 +213,7 @@ export function registerAggregateGroupedTool(server: McpServer): void {
   server.registerTool(
     "aggregate_grouped",
     {
+      annotations: annotationsFor("aggregate_grouped"),
       title: "Grouped Aggregate Query",
       description:
         "Run aggregate functions (COUNT, AVG, MIN, MAX, SUM) grouped by a field on any " +

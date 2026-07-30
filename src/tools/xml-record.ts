@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { XMLRecordManager } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Instance parameter description shared across XML record tools.
@@ -26,6 +27,7 @@ export function registerExportRecordXmlTool(server: McpServer): void {
   server.registerTool(
     "export_record_xml",
     {
+      annotations: annotationsFor("export_record_xml"),
       title: "Export Record as XML",
       description:
         "Export a single record from a ServiceNow instance in unload XML format. " +
@@ -99,6 +101,7 @@ export function registerImportRecordsXmlTool(server: McpServer): void {
   server.registerTool(
     "import_records_xml",
     {
+      annotations: annotationsFor("import_records_xml"),
       title: "Import Records from XML",
       description:
         "Import XML records into a ServiceNow instance via the sys_upload.do processor. " +
