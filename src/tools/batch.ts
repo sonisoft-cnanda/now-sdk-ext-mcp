@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { BatchOperations } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { progressReporter } from "../common/progress.js";
 
 /**
  * Registers the batch_create_records tool on the MCP server.
@@ -58,13 +59,14 @@ export function registerBatchCreateRecordsTool(server: McpServer): void {
           ),
       },
     },
-    async ({ instance, operations, transaction }) => {
+    async ({ instance, operations, transaction }, extra) => {
       try {
+        const onProgress = progressReporter(extra);
         const result = await withConnectionRetry(
           instance,
           async (snInstance) => {
             const batchOps = new BatchOperations(snInstance);
-            return await batchOps.batchCreate({ operations, transaction });
+            return await batchOps.batchCreate({ operations, transaction, onProgress });
           }
         );
 
@@ -152,8 +154,9 @@ export function registerBatchUpdateRecordsTool(server: McpServer): void {
           ),
       },
     },
-    async ({ instance, updates, stop_on_error }) => {
+    async ({ instance, updates, stop_on_error }, extra) => {
       try {
+        const onProgress = progressReporter(extra);
         const result = await withConnectionRetry(
           instance,
           async (snInstance) => {
@@ -161,6 +164,7 @@ export function registerBatchUpdateRecordsTool(server: McpServer): void {
             return await batchOps.batchUpdate({
               updates,
               stopOnError: stop_on_error,
+              onProgress,
             });
           }
         );

@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { UpdateSetManager } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { progressReporter } from "../common/progress.js";
 
 /**
  * Registers the get_current_update_set tool on the MCP server.
@@ -437,11 +438,12 @@ export function registerCloneUpdateSetTool(server: McpServer): void {
           .describe("The name for the new cloned update set."),
       },
     },
-    async ({ instance, source_sys_id, new_name }) => {
+    async ({ instance, source_sys_id, new_name }, extra) => {
       try {
+        const onProgress = progressReporter(extra);
         const result = await withConnectionRetry(instance, async (snInstance) => {
           const manager = new UpdateSetManager(snInstance);
-          return await manager.cloneUpdateSet(source_sys_id, new_name);
+          return await manager.cloneUpdateSet(source_sys_id, new_name, onProgress);
         });
 
         const lines: string[] = [];
