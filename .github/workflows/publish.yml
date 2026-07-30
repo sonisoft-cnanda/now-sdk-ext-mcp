@@ -92,15 +92,17 @@ jobs:
 
       - name: Publish (dry run)
         if: inputs.dry-run == true && steps.dist-tag.outputs.skip != 'true'
+        # No NODE_AUTH_TOKEN: this package publishes via a Trusted Publisher
+        # (OIDC), which npm derives from the id-token permission above. npmjs is
+        # phasing token-based publishing out — if publishing breaks, fix the
+        # trusted publisher config on npmjs rather than reintroducing a secret.
         run: npm publish --tag "${{ steps.dist-tag.outputs.tag }}" --dry-run
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish
         if: inputs.dry-run != true && steps.dist-tag.outputs.skip != 'true'
+        # See the dry-run step above: Trusted Publisher (OIDC), no token. The
+        # same OIDC identity is what makes --provenance possible.
         run: npm publish --tag "${{ steps.dist-tag.outputs.tag }}" --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Summary
         if: inputs.dry-run != true && steps.dist-tag.outputs.skip != 'true'
