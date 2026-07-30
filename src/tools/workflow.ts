@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { WorkflowManager } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { progressReporter } from "../common/progress.js";
 
 /**
  * Registers the create_workflow tool on the MCP server.
@@ -140,8 +141,9 @@ export function registerCreateWorkflowTool(server: McpServer): void {
       access,
       template,
       active,
-    }) => {
+    }, extra) => {
       try {
+        const onProgress = progressReporter(extra);
         const result = await withConnectionRetry(
           instance,
           async (snInstance) => {
@@ -158,7 +160,7 @@ export function registerCreateWorkflowTool(server: McpServer): void {
               access,
               template,
               active,
-            });
+            }, onProgress);
           }
         );
 

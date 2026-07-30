@@ -6,6 +6,7 @@
 import "./common/credstore-boot.js";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { readServerVersion } from "./common/version.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerExecuteScriptTool } from "./tools/execute-script.js";
 import {
@@ -130,10 +131,22 @@ import {
   registerGetFlowLogsTool,
 } from "./tools/flow.js";
 
-const server = new McpServer({
-  name: "now-sdk-ext-mcp",
-  version: "1.0.0-alpha.0",
-});
+const server = new McpServer(
+  {
+    name: "now-sdk-ext-mcp",
+    version: readServerVersion(),
+  },
+  {
+    // Declared explicitly rather than inferred from what happens to get registered.
+    //
+    // Note progress is NOT a capability — it is base protocol, driven entirely by
+    // the client putting a progressToken in a request's _meta. So there is nothing
+    // to advertise for it; the server just has to honour the token when it is sent.
+    capabilities: {
+      tools: {},
+    },
+  }
+);
 
 // Register tools
 registerExecuteScriptTool(server);

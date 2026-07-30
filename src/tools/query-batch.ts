@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { QueryBatchOperations } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { progressReporter } from "../common/progress.js";
 
 /**
  * Registers the query_update_records tool on the MCP server.
@@ -62,8 +63,9 @@ export function registerQueryUpdateRecordsTool(server: McpServer): void {
           ),
       },
     },
-    async ({ instance, table, query, data, confirm, limit }) => {
+    async ({ instance, table, query, data, confirm, limit }, extra) => {
       try {
+        const onProgress = progressReporter(extra);
         const result = await withConnectionRetry(
           instance,
           async (snInstance) => {
@@ -74,6 +76,7 @@ export function registerQueryUpdateRecordsTool(server: McpServer): void {
               data,
               confirm,
               limit,
+              onProgress,
             });
           }
         );
@@ -181,8 +184,9 @@ export function registerQueryDeleteRecordsTool(server: McpServer): void {
           ),
       },
     },
-    async ({ instance, table, query, confirm, limit }) => {
+    async ({ instance, table, query, confirm, limit }, extra) => {
       try {
+        const onProgress = progressReporter(extra);
         const result = await withConnectionRetry(
           instance,
           async (snInstance) => {
@@ -192,6 +196,7 @@ export function registerQueryDeleteRecordsTool(server: McpServer): void {
               query,
               confirm,
               limit,
+              onProgress,
             });
           }
         );
