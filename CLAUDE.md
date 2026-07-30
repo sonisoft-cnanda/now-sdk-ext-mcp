@@ -91,6 +91,41 @@ unchanged for anyone who has not asked.
 The boot module writes only to **stderr** — stdout is the JSON-RPC transport, and
 a non-protocol byte there breaks the client's parser.
 
+## Releasing & Publishing
+
+**Publishing to npm uses a Trusted Publisher (OIDC), not an auth token.** npmjs is
+phasing token-based publishing out, so nothing here should reintroduce it.
+
+Practically, that means:
+
+- The workflow needs `permissions: id-token: write`. Without it npm cannot mint
+  the OIDC credential and the publish fails with an auth error that reads like a
+  missing token — which is the wrong thing to go looking for.
+- The package must be registered as a trusted publisher on npmjs, bound to this
+  repository and workflow file. Renaming `publish.yml`, or publishing from a
+  different workflow, breaks that binding.
+- `--provenance` works because of the same OIDC identity, which is why published
+  versions carry SLSA attestations.
+- Do NOT add an `NPM_TOKEN` back. If publishing fails, the fix is in the trusted
+  publisher configuration on npmjs, not a new secret.
+
+The release chain:
+
+1. Merge to `main` → `release.yml` runs `semantic-release` (conventional commits,
+   angular preset). It bumps the version, tags, and cuts a GitHub release.
+   `npmPublish` is `false` — semantic-release never publishes.
+2. That GitHub release fires `publish.yml`, which builds and publishes.
+
+Step 2 fires **only** because `release.yml` runs semantic-release with
+`RELEASE_TOKEN` rather than the default `GITHUB_TOKEN`. GitHub suppresses events
+raised by `GITHUB_TOKEN` so a workflow cannot trigger further workflows. Since
+`release.yml` falls back (`secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN`),
+removing that secret leaves releases working while publishing silently stops.
+
+`publish.yml` also accepts `workflow_dispatch` for backfilling a version, dry
+runs, or republishing a specific ref. It skips when the version already exists on
+npm, so re-running it is a no-op rather than an error.
+
 ## Conventions
 
 - ES Modules (`"type": "module"` in package.json)
