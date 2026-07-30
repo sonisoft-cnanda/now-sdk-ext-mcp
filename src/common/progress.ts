@@ -35,16 +35,22 @@ export type ProgressCallback = (message: string) => void;
  */
 export function progressReporter(extra: ToolExtra | undefined): ProgressCallback | undefined {
     const token = extra?._meta?.progressToken;
-    if (token === undefined || token === null) {
+    // `== null` rather than a truthiness check: progressToken may be a number,
+    // and 0 is a legitimate token that `!token` would silently discard.
+    if (extra === undefined || token == null) {
         return undefined;
     }
 
+    // Captured after the guard so the closure below holds a narrowed reference.
+    // TypeScript cannot carry the narrowing on `extra` across the function
+    // boundary on its own.
+    const sink = extra;
     let sent = 0;
     return (message: string) => {
         sent += 1;
         // Fire-and-forget. A failed notification must never fail the operation that
         // was reporting progress — the work itself is what the caller asked for.
-        void extra?.sendNotification({
+        void sink.sendNotification({
             method: "notifications/progress",
             params: {
                 progressToken: token,

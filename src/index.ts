@@ -5,8 +5,8 @@
 // non-interactive child process, where the keyring cannot be unlocked.
 import "./common/credstore-boot.js";
 
-import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { readServerVersion } from "./common/version.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerExecuteScriptTool } from "./tools/execute-script.js";
 import {
@@ -131,21 +131,10 @@ import {
   registerGetFlowLogsTool,
 } from "./tools/flow.js";
 
-/**
- * Read from package.json rather than hard-coded.
- *
- * The literal here had drifted to "1.0.0-alpha.0" while the package was on 4.x,
- * and this string is exactly what clients are told during the initialize
- * handshake — so every client had the wrong version of the server it was talking
- * to, and semantic-release could never keep it correct.
- */
-const SERVER_VERSION: string =
-  (createRequire(import.meta.url)("../package.json") as { version: string }).version;
-
 const server = new McpServer(
   {
     name: "now-sdk-ext-mcp",
-    version: SERVER_VERSION,
+    version: readServerVersion(),
   },
   {
     // Declared explicitly rather than inferred from what happens to get registered.
