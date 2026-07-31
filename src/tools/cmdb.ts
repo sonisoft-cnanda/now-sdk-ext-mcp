@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CMDBRelationships } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the get_cmdb_relationships tool on the MCP server.
@@ -12,6 +13,7 @@ export function registerGetCmdbRelationshipsTool(server: McpServer): void {
   server.registerTool(
     "get_cmdb_relationships",
     {
+      annotations: annotationsFor("get_cmdb_relationships"),
       title: "Get CMDB Relationships",
       description:
         "Get direct relationships of a CMDB Configuration Item (CI). Returns upstream, " +
@@ -120,6 +122,7 @@ export function registerTraverseCmdbGraphTool(server: McpServer): void {
   server.registerTool(
     "traverse_cmdb_graph",
     {
+      annotations: annotationsFor("traverse_cmdb_graph"),
       title: "Traverse CMDB Graph",
       description:
         "Traverse the CMDB relationship graph starting from a Configuration Item using " +

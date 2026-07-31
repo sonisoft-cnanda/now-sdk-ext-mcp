@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { AttachmentManager } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the list_attachments tool on the MCP server.
@@ -12,6 +13,7 @@ export function registerListAttachmentsTool(server: McpServer): void {
   server.registerTool(
     "list_attachments",
     {
+      annotations: annotationsFor("list_attachments"),
       title: "List Attachments",
       description:
         "List file attachments on a ServiceNow record. Returns metadata for each " +
@@ -106,6 +108,7 @@ export function registerGetAttachmentInfoTool(server: McpServer): void {
   server.registerTool(
     "get_attachment_info",
     {
+      annotations: annotationsFor("get_attachment_info"),
       title: "Get Attachment Info",
       description:
         "Get metadata for a specific attachment by its sys_id. Returns file name, " +
@@ -174,6 +177,7 @@ export function registerUploadAttachmentTool(server: McpServer): void {
   server.registerTool(
     "upload_attachment",
     {
+      annotations: annotationsFor("upload_attachment"),
       title: "Upload Attachment",
       description:
         "Upload a file attachment to a ServiceNow record. The file content must be " +

@@ -5,6 +5,7 @@ import {
   withConnectionRetry,
   isRetryableResponse,
 } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -51,6 +52,7 @@ export function registerLookupColumnsTool(server: McpServer): void {
   server.registerTool(
     "lookup_columns",
     {
+      annotations: annotationsFor("lookup_columns"),
       title: "Lookup Table Columns",
       description:
         "List or search columns (fields) on a ServiceNow table. Queries the sys_dictionary " +

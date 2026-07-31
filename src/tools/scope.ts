@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ScopeManager } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the get_current_scope tool on the MCP server.
@@ -13,6 +14,7 @@ export function registerGetCurrentScopeTool(server: McpServer): void {
   server.registerTool(
     "get_current_scope",
     {
+      annotations: annotationsFor("get_current_scope"),
       title: "Get Current Application Scope",
       description:
         "Get the currently active application scope on the ServiceNow instance.",
@@ -92,6 +94,7 @@ export function registerSetCurrentScopeTool(server: McpServer): void {
   server.registerTool(
     "set_current_scope",
     {
+      annotations: annotationsFor("set_current_scope"),
       title: "Set Current Application Scope",
       description:
         "Change the active application scope. Validates the app exists, records " +
@@ -185,6 +188,7 @@ export function registerListScopedAppsTool(server: McpServer): void {
   server.registerTool(
     "list_scoped_apps",
     {
+      annotations: annotationsFor("list_scoped_apps"),
       title: "List Scoped Applications",
       description:
         "List scoped applications (sys_app records) on the instance with optional filtering.",

@@ -5,6 +5,7 @@ import {
   withConnectionRetry,
   isRetryableResponse,
 } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 interface ATFTestRecord {
   sys_id: string;
@@ -29,6 +30,7 @@ export function registerFindAtfTestsTool(server: McpServer): void {
   server.registerTool(
     "find_atf_tests",
     {
+      annotations: annotationsFor("find_atf_tests"),
       title: "Find ATF Tests",
       description:
         "Search for ATF (Automated Test Framework) tests on a ServiceNow instance. " +

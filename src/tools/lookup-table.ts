@@ -5,6 +5,7 @@ import {
   withConnectionRetry,
   isRetryableResponse,
 } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -49,6 +50,7 @@ export function registerLookupTableTool(server: McpServer): void {
   server.registerTool(
     "lookup_table",
     {
+      annotations: annotationsFor("lookup_table"),
       title: "Lookup Table",
       description:
         "Search for ServiceNow tables by name or label. Queries the sys_db_object table " +

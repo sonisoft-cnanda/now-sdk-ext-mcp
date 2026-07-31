@@ -5,6 +5,7 @@ import {
   withConnectionRetry,
   isRetryableResponse,
 } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
 
 interface SysScopeRecord {
   sys_id: string;
@@ -60,6 +61,7 @@ export function registerLookupAppTool(server: McpServer): void {
   server.registerTool(
     "lookup_app",
     {
+      annotations: annotationsFor("lookup_app"),
       title: "Lookup Application or Plugin",
       description:
         "Search for ServiceNow applications (scoped apps) and platform plugins by name, " +

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { WorkflowManager } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
 import { progressReporter } from "../common/progress.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the create_workflow tool on the MCP server.
@@ -14,6 +15,7 @@ export function registerCreateWorkflowTool(server: McpServer): void {
   server.registerTool(
     "create_workflow",
     {
+      annotations: annotationsFor("create_workflow"),
       title: "Create Workflow",
       description:
         "Create a complete ServiceNow workflow from a single specification. " +

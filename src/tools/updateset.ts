@@ -3,6 +3,7 @@ import { z } from "zod";
 import { UpdateSetManager } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
 import { progressReporter } from "../common/progress.js";
+import { annotationsFor } from "../common/annotations.js";
 
 /**
  * Registers the get_current_update_set tool on the MCP server.
@@ -13,6 +14,7 @@ export function registerGetCurrentUpdateSetTool(server: McpServer): void {
   server.registerTool(
     "get_current_update_set",
     {
+      annotations: annotationsFor("get_current_update_set"),
       title: "Get Current Update Set",
       description:
         "Get the currently active update set for the session.",
@@ -89,6 +91,7 @@ export function registerListUpdateSetsTool(server: McpServer): void {
   server.registerTool(
     "list_update_sets",
     {
+      annotations: annotationsFor("list_update_sets"),
       title: "List Update Sets",
       description:
         "List update sets on the instance with optional filtering.",
@@ -190,6 +193,7 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
   server.registerTool(
     "create_update_set",
     {
+      annotations: annotationsFor("create_update_set"),
       title: "Create Update Set",
       description:
         "Create a new update set. IMPORTANT: This creates a new update set on the instance.",
@@ -269,6 +273,7 @@ export function registerSetCurrentUpdateSetTool(server: McpServer): void {
   server.registerTool(
     "set_current_update_set",
     {
+      annotations: annotationsFor("set_current_update_set"),
       title: "Set Current Update Set",
       description:
         "Set the active update set for the session. All changes will be captured in this update set.",
@@ -333,6 +338,7 @@ export function registerInspectUpdateSetTool(server: McpServer): void {
   server.registerTool(
     "inspect_update_set",
     {
+      annotations: annotationsFor("inspect_update_set"),
       title: "Inspect Update Set",
       description:
         "Inspect an update set's contents — lists all components grouped by type " +
@@ -414,6 +420,7 @@ export function registerCloneUpdateSetTool(server: McpServer): void {
   server.registerTool(
     "clone_update_set",
     {
+      annotations: annotationsFor("clone_update_set"),
       title: "Clone Update Set",
       description:
         "Clone an existing update set by creating a new one and copying all its records. " +
@@ -481,6 +488,7 @@ export function registerMoveUpdateSetRecordsTool(server: McpServer): void {
   server.registerTool(
     "move_update_set_records",
     {
+      annotations: annotationsFor("move_update_set_records"),
       title: "Move Update Set Records",
       description:
         "Move records from one update set to another. You can move specific records " +
