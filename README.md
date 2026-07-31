@@ -207,7 +207,8 @@ test/
 
 ### Adding a New Tool
 
-1. Create a new file in `src/tools/` (e.g., `src/tools/query-table.ts`).
+1. Create a new file in `src/resources/       # servicenow:// read-only resources
+src/tools/` (e.g., `src/tools/query-table.ts`).
 2. Export a registration function:
 
    ```typescript

@@ -108,6 +108,19 @@ export function clearInstance(authAlias?: string): void {
 }
 
 /** Patterns that indicate a connection/session problem worth retrying. */
+/** Set by sn-credstore's shim once it has taken over credential storage. */
+export const CRED_STORE_PATCHED_ENV = "NOW_SDK_KEYCHAIN_PATCHED";
+
+/**
+ * True when credentials come from sn-credstore rather than the OS keyring.
+ *
+ * Exported so callers do not re-spell the variable name and the "=== 1"
+ * convention; both were already duplicated once.
+ */
+export function isCredStoreActive(): boolean {
+  return process.env[CRED_STORE_PATCHED_ENV] === "1";
+}
+
 const RETRYABLE_PATTERNS =
   /ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|socket hang up|fetch failed|No response|Body not XML/i;
 
