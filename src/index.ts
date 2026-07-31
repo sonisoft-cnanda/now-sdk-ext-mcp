@@ -6,6 +6,7 @@
 import "./common/credstore-boot.js";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerServiceNowResources } from "./resources/servicenow.js";
 import { readServerVersion } from "./common/version.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerExecuteScriptTool } from "./tools/execute-script.js";
@@ -144,9 +145,12 @@ const server = new McpServer(
     // to advertise for it; the server just has to honour the token when it is sent.
     capabilities: {
       tools: {},
+      resources: {},
     },
   }
 );
+
+registerServiceNowResources(server);
 
 // Register tools
 registerExecuteScriptTool(server);
