@@ -27,8 +27,14 @@
  * - `idempotentHint` — repeating the call with identical arguments leaves the
  *   same end state. True for "set this field to X"; false for "append a comment"
  *   or "create a record", which accumulate.
- * - `openWorldHint` — reserved here for arbitrary code execution, where the
- *   effect is genuinely unbounded and cannot be inferred from the arguments.
+ * - `openWorldHint` — TRUE FOR EVERY TOOL HERE, and set explicitly rather than
+ *   left to the spec's default. All of them talk to a live ServiceNow instance,
+ *   which is exactly what the spec means by an open world. It was tempting to use
+ *   it to single out arbitrary code execution, but that would have been wrong in
+ *   both directions: the spec default is already `true`, so the marking would
+ *   have been a no-op, and leaving it off the other 80-odd would have implied
+ *   they were closed-world when they are not. MCP has no hint for "runs
+ *   caller-supplied logic" — the tool description carries that.
  */
 
 export interface ToolAnnotations {
@@ -39,29 +45,36 @@ export interface ToolAnnotations {
 }
 
 /** Cannot modify anything. */
-const READ: ToolAnnotations = { readOnlyHint: true };
+const READ: ToolAnnotations = { readOnlyHint: true, openWorldHint: true };
 
 /** Adds something new; nothing pre-existing is lost. Repeating accumulates. */
-const CREATE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+const CREATE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 
 /** Sets state to a given value. Nothing is destroyed; repeating is a no-op. */
-const SET: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
+const SET: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
 /** Overwrites or removes data that already existed. Repeating settles. */
-const OVERWRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true };
+const OVERWRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true };
 
 /** Overwrites or removes, and repeating does NOT settle. */
-const OVERWRITE_ONCE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false };
+const OVERWRITE_ONCE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
 
-/** Runs caller-supplied logic. Effect is unbounded and not inferable from args. */
-const ARBITRARY: ToolAnnotations = {
-    readOnlyHint: false,
-    destructiveHint: true,
-    idempotentHint: false,
-    openWorldHint: true,
-};
+/**
+ * Runs caller-supplied logic — a script or a flow someone else authored.
+ *
+ * Structurally identical to OVERWRITE_ONCE, because MCP has no hint that means
+ * "unbounded effect". Kept as a separate name purely so this table records which
+ * tools are in that category; the warning that actually reaches the model is in
+ * the tool description.
+ */
+const ARBITRARY: ToolAnnotations = OVERWRITE_ONCE;
 
 export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
+    // ---- meta: reports this server's own configuration, touches no instance.
+    // Registered outside TOOL_REGISTRY because it is always available regardless
+    // of the active package.
+    list_tool_packages: READ,
+
     // ---- aggregate: server-side counts, no writes
     count_records: READ,
     aggregate_query: READ,
@@ -220,7 +233,12 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
  * Failing at registration makes that impossible.
  */
 export function annotationsFor(toolName: string): ToolAnnotations {
-    const annotations = TOOL_ANNOTATIONS[toolName];
+    // hasOwnProperty, not bracket access: TOOL_ANNOTATIONS["constructor"] would
+    // otherwise return the Object constructor — truthy — and this would hand back
+    // a function instead of throwing.
+    const annotations = Object.prototype.hasOwnProperty.call(TOOL_ANNOTATIONS, toolName)
+        ? TOOL_ANNOTATIONS[toolName]
+        : undefined;
     if (!annotations) {
         throw new Error(
             `No annotations defined for tool "${toolName}". Add it to TOOL_ANNOTATIONS ` +
