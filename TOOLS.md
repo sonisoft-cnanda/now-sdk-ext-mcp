@@ -35,6 +35,49 @@ Two behaviours worth knowing:
 Schema resources deliberately omit the expensive optional sections that
 `discover_table_schema` can include — a resource is attached passively and should
 not silently pull choices and business rules with it.
+## Tool packages
+
+By default every tool is registered. Set `MCP_TOOL_PACKAGE` to expose a subset
+instead — model tool-selection accuracy degrades as the option count grows, and
+these descriptions are long by design, so an unused tool is a cost paid on every
+session.
+
+```jsonc
+// claude_desktop_config.json, or any MCP client's env block
+"env": { "MCP_TOOL_PACKAGE": "service_desk" }
+```
+
+| Package | For |
+|---|---|
+| `full` | Everything. The default when the variable is unset. |
+| `readonly` | Only tools that cannot modify anything. Derived from the `readOnlyHint` annotations, so it cannot drift. |
+| `developer` | Scripts, schema, source sync, update sets, scope, logs, code search. |
+| `service_desk` | Tickets, knowledge, catalog requests. No scripting or schema. |
+| `admin` | Users and groups, plugins, health, app lifecycle, scripting. |
+| `change_manager` | Change approvals, update sets, flows and workflows, app repo. |
+| `flow_developer` | Flow Designer end to end, plus what is needed to debug flows. |
+
+Names can be **comma-separated**, which takes the **union**: `developer,flow_developer`.
+Union rather than intersection, because combining two role packages is how you
+say "I do both" — intersecting them is almost always empty.
+
+Packages are defined in `src/config/tool-packages.ts`. Adding one needs no code
+change beyond that file.
+
+### Behaviour worth knowing
+
+- **`list_tool_packages` is always registered**, whatever the package. Without it,
+  a filtered session cannot tell "this server cannot do that" from "that tool is
+  filtered out of this session" — and would report a missing capability when the
+  real answer is a different package.
+- **Every failure degrades toward MORE tools, never fewer.** An unrecognised name
+  falls back to `full` and says so on stderr. A silently smaller surface would
+  look like a broken server, with tools simply absent and no error to search for.
+- **A package may name tools that do not exist yet.** Several name tools from open
+  tickets. Unknown names are reported once at startup and skipped, so a package is
+  already correct the day those tools land. The same warning catches a typo.
+- Resolution is reported on stderr at startup, never stdout — stdout is the
+  JSON-RPC transport.
 
 ---
 

@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createTestClientServer } from '../../helpers/mcp-test-helpers.js'
 import { TOOL_ANNOTATIONS, annotationsFor } from '../../../src/common/annotations.js'
+import { allToolNames } from '../../../src/tools/registry.js'
 
 /** Every tool name actually registered in src/tools/, read from source. */
 function registeredToolNames(): string[] {
@@ -23,13 +24,28 @@ describe('tool annotation coverage', () => {
   // classification. Drift in either direction is a bug: an unannotated tool
   // silently inherits destructiveHint: true, and a stale entry hides that a
   // tool was renamed or removed.
-  it('covers exactly the tools that are registered', () => {
+  it('annotates every tool that is registered', () => {
+    // Direction that matters most: a registered tool with no annotation silently
+    // inherits destructiveHint: true and never gets auto-approved.
     const registered = new Set(registeredToolNames())
     const declared = new Set(Object.keys(TOOL_ANNOTATIONS))
 
     expect([...registered].filter((n) => !declared.has(n))).toEqual([])
-    expect([...declared].filter((n) => !registered.has(n))).toEqual([])
-    expect(registered.size).toBe(86)
+  })
+
+  it('has no annotation for a tool that no longer exists', () => {
+    // The other direction: a stale entry hides that a tool was renamed or removed.
+    const registered = new Set(registeredToolNames())
+    expect(Object.keys(TOOL_ANNOTATIONS).filter((n) => !registered.has(n))).toEqual([])
+  })
+
+  it('annotates one more tool than the registry holds', () => {
+    // list_tool_packages is registered unconditionally rather than through
+    // TOOL_REGISTRY, because a filtered session still needs to be able to ask
+    // what it is missing. So annotations cover the registry plus exactly that one.
+    const registryNames = new Set(allToolNames())
+    const extra = Object.keys(TOOL_ANNOTATIONS).filter((n) => !registryNames.has(n))
+    expect(extra).toEqual(['list_tool_packages'])
   })
 
   it('gives every tool an explicit readOnlyHint', () => {
@@ -77,6 +93,23 @@ describe('tool annotation coverage', () => {
 
   it('throws for an unknown tool rather than defaulting', () => {
     expect(() => annotationsFor('no_such_tool')).toThrow(/No annotations defined/)
+  })
+
+  it('throws for names that collide with Object.prototype', () => {
+    // Bracket access would return the Object constructor here — truthy — and hand
+    // back a function instead of throwing.
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      expect(() => annotationsFor(name)).toThrow(/No annotations defined/)
+    }
+  })
+
+  it('marks every tool open-world, since they all reach a live instance', () => {
+    // Not a discriminator: the spec default is already true, so singling out a few
+    // would be a no-op, and omitting it elsewhere would imply closed-world.
+    const notOpen = Object.entries(TOOL_ANNOTATIONS)
+      .filter(([, a]) => a.openWorldHint !== true)
+      .map(([name]) => name)
+    expect(notOpen).toEqual([])
   })
 
   it('keeps a majority of the surface read-only, which is the point', () => {
