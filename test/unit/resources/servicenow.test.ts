@@ -6,6 +6,9 @@ jest.unstable_mockModule('@sonisoft/sn-credstore', () => ({
 }))
 jest.unstable_mockModule('../../../src/common/connection.js', () => ({
   withConnectionRetry: jest.fn(),
+  // Real implementation, not a stub: the tests drive it via the env var, and a
+  // stub here would make them assert against the mock rather than the behaviour.
+  isCredStoreActive: () => process.env.NOW_SDK_KEYCHAIN_PATCHED === '1',
 }))
 jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
   ScopeManager: jest.fn().mockImplementation(() => ({ getCurrentApplication: jest.fn() })),
@@ -146,6 +149,19 @@ describe('servicenow:// resources', () => {
 
       expect(mockRetry).toHaveBeenCalled()
       expect(body.name).toBe('Dev set')
+    })
+
+    it('propagates a read failure rather than returning it as content', async () => {
+      // Tools return {isError:true} so a model reasoning about the result can see
+      // the failure in-band. A resource is attached, not reasoned over, so a
+      // failed read is a protocol error — returning a JSON body saying "failed"
+      // would look like successfully attached content.
+      mockRetry.mockRejectedValue(new Error('No credentials found for auth alias "prod"'))
+      const { client } = await connect()
+
+      await expect(
+        client.readResource({ uri: 'servicenow://prod/scope/current' })
+      ).rejects.toThrow(/No credentials found/)
     })
 
     it('extracts both variables from the schema template', async () => {

@@ -14,7 +14,14 @@
  *    fetch path is how you end up with a resource that returns nothing for
  *    users of the recommended credential setup while the tool beside it works.
  *
- * 2. The alias is part of the URI, not an implicit default. Tools take an
+ * 2. Errors PROPAGATE rather than being returned as content. Tools return
+ *    `{isError: true}` so a failure is visible in-band to a model that is
+ *    reasoning about the result; a resource is attached, not reasoned over, so a
+ *    failed read is a protocol error and the client decides how to surface it.
+ *    Returning a JSON body describing a failure would look like successfully
+ *    attached content that happens to say "failed".
+ *
+ * 3. The alias is part of the URI, not an implicit default. Tools take an
  *    optional `instance` argument; a resource has only its URI, so the instance
  *    has to be addressable — `servicenow://dev/schema/incident` is a different
  *    resource from `servicenow://prod/schema/incident`, and conflating them
@@ -23,11 +30,8 @@
 
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ScopeManager, UpdateSetManager, SchemaDiscovery } from "@sonisoft/now-sdk-ext-core";
-import { listAliases } from "@sonisoft/sn-credstore";
-import { withConnectionRetry } from "../common/connection.js";
-
-/** Set by sn-credstore's shim when it has taken over credential storage. */
-const PATCHED_ENV_VAR = "NOW_SDK_KEYCHAIN_PATCHED";
+import { listAliases, AliasInfo } from "@sonisoft/sn-credstore";
+import { withConnectionRetry, isCredStoreActive } from "../common/connection.js";
 
 /**
  * Projects an alias onto exactly the fields intended for publication.
@@ -38,13 +42,7 @@ const PATCHED_ENV_VAR = "NOW_SDK_KEYCHAIN_PATCHED";
  * default — and this is the single most attachable resource in the server, the
  * one most likely to be pasted wholesale into a conversation.
  */
-function publicAliasFields(alias: {
-    alias: string;
-    isDefault: boolean;
-    type: string;
-    instanceUrl: string;
-    username?: string;
-}): Record<string, unknown> {
+function publicAliasFields(alias: AliasInfo): Record<string, unknown> {
     return {
         alias: alias.alias,
         isDefault: alias.isDefault,
@@ -89,7 +87,7 @@ function registerInstancesResource(server: McpServer): void {
             mimeType: "application/json",
         },
         async (uri) => {
-            const shimActive = process.env[PATCHED_ENV_VAR] === "1";
+            const shimActive = isCredStoreActive();
             const defaultAlias = process.env.SN_AUTH_ALIAS ?? null;
 
             if (!shimActive) {
@@ -155,6 +153,25 @@ function registerAliasScopedResource(
                 flat[k] = Array.isArray(v) ? v[0] : v;
             }
             const alias = flat.alias;
+
+            // The URI owning the alias is the headline guarantee of this module,
+            // and without this it would rest on an SDK implementation detail:
+            // resolveAlias() in connection.ts falls back on a FALSY alias
+            // (`authAlias || process.env.SN_AUTH_ALIAS`), so an empty capture
+            // would silently resolve against the ambient default — the exact
+            // cross-instance confusion this design prevents.
+            //
+            // Verified that the current SDK matcher returns null rather than an
+            // empty capture for `servicenow:///scope/current`, so this is not
+            // reachable today. It is here so the guarantee is local rather than
+            // dependent on that staying true.
+            if (!alias) {
+                throw new Error(
+                    `Resource URI ${uri.href} has no instance alias. ` +
+                        `Use servicenow://<alias>/... — the alias is never inferred from the environment.`,
+                );
+            }
+
             return json(uri.href, await read(alias, flat));
         },
     );

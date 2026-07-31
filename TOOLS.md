@@ -4,6 +4,40 @@ This document lists all MCP tools exposed by the `now-sdk-ext-mcp` server. When 
 
 ---
 
+## Available Resources
+
+Alongside tools, the server exposes read-only `servicenow://` resources. Use these
+when you want to *attach* reference data rather than spend a tool call on it.
+
+| URI | What |
+|---|---|
+| `servicenow://instances` | Aliases this server can reach, the alias used when a tool omits one, and which credential store they came from. Contains no secrets. |
+| `servicenow://{alias}/scope/current` | The application scope currently selected. |
+| `servicenow://{alias}/update-set/current` | The update set currently capturing changes. |
+| `servicenow://{alias}/schema/{table}` | Fields, types and references for a table. |
+
+**The alias is part of the URI and is never inferred from the environment.**
+`servicenow://prod/schema/incident` is a different resource from
+`servicenow://dev/schema/incident`; a resource has no `instance` argument to fall
+back on, so addressing it explicitly is what keeps the two apart.
+
+Two behaviours worth knowing:
+
+- **`servicenow://instances` reports which store it read.** When the sn-credstore
+  shim is inactive the OS keyring is authoritative and cannot be enumerated, so
+  the alias list is `null` with an explanation rather than an empty array — empty
+  would read as "no credentials configured", which is a different thing.
+- **A failed read is a protocol error, not content.** Tools return
+  `{isError: true}` so a model reasoning about a result sees the failure in-band.
+  A resource is attached rather than reasoned over, so it fails at the protocol
+  level and the client decides how to surface it.
+
+Schema resources deliberately omit the expensive optional sections that
+`discover_table_schema` can include — a resource is attached passively and should
+not silently pull choices and business rules with it.
+
+---
+
 ## execute_script
 
 Execute JavaScript on a ServiceNow instance using Scripts - Background.
