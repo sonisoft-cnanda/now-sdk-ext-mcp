@@ -12,6 +12,16 @@ jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
     getUserName: () => settings?.credential?.username ?? 'test-user',
     _settings: settings,
   })),
+  // connection.ts logs through core now, so the mock has to carry the logging
+  // surface too — otherwise the import fails before any assertion runs.
+  Logger: jest.fn().mockImplementation(() => ({
+    debug: jest.fn(),
+    error: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+  })),
+  configureLogging: jest.fn(),
+  flushLogs: jest.fn(() => Promise.resolve()),
 }))
 
 // Dynamic imports after mocks are set up (required for ESM)

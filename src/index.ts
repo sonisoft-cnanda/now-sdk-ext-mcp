@@ -5,6 +5,13 @@
 // non-interactive child process, where the keyring cannot be unlocked.
 import "./common/credstore-boot.js";
 
+// Second, and before anything constructs a core manager: core's loggers are field
+// initializers, and until NEX-3 merely constructing one created ./logs/ in whatever
+// directory the client happened to launch this server from.
+import { flushLogs } from "@sonisoft/now-sdk-ext-core";
+import { initLogging, getLogger } from "./common/logging.js";
+initLogging();
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerServiceNowResources } from "./resources/servicenow.js";
 import { TOOL_REGISTRY } from "./tools/registry.js";
@@ -12,6 +19,8 @@ import { registerListToolPackagesTool } from "./tools/tool-packages.js";
 import { resolveToolPackage, reportResolution } from "./common/tool-packages.js";
 import { readServerVersion } from "./common/version.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const log = getLogger("mcp");
 const server = new McpServer(
   {
     name: "now-sdk-ext-mcp",
@@ -51,21 +60,25 @@ registerListToolPackagesTool(server, activePackage);
 
 // Prevent the process from crashing silently on unexpected errors.
 // Log to stderr (stdout is reserved for JSON-RPC).
+// Through the logger, not console.error: an uncaught error here can be an auth or
+// HTTP failure carrying a live session, and only the logger redacts.
 process.on("uncaughtException", (error) => {
-  console.error("[now-sdk-ext-mcp] Uncaught exception:", error);
+  log.error("Uncaught exception", { error });
 });
 process.on("unhandledRejection", (reason) => {
-  console.error("[now-sdk-ext-mcp] Unhandled rejection:", reason);
+  log.error("Unhandled rejection", { reason });
 });
 
 // Start the server on stdio transport
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("now-sdk-ext-mcp server running on stdio");
+  log.info("now-sdk-ext-mcp server running on stdio");
 }
 
 main().catch((error) => {
-  console.error("Fatal error:", error);
-  process.exit(1);
+  log.error("Fatal error starting server", { error });
+  // Flush before exiting: winston buffers, and this is the line that explains why
+  // the server is not there.
+  void flushLogs().finally(() => process.exit(1));
 });

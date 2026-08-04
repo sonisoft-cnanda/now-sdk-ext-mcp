@@ -37,7 +37,8 @@ The CLI is the reference implementation for how to use the core library. When ad
 - All ServiceNow HTTP communication goes through `ServiceNowRequest` from the core library, which handles auth, CSRF tokens, cookies, and session management automatically.
 - `BackgroundScriptExecutor` posts to `/sys.scripts.do` with a CSRF token, parses the XML response, and returns structured `BackgroundScriptExecutionResult`.
 - Authentication uses `getCredentials()` from `@servicenow/sdk-cli` which reads from the ServiceNow CLI's stored credential system (same credentials used by `nex` CLI).
-- The MCP server MUST NOT use `console.log()` — stdout is reserved for JSON-RPC. Use `console.error()` for debug output, or use the MCP logging context (`ctx.mcpReq.log()`).
+- The MCP server MUST NOT write to stdout — it is reserved for JSON-RPC, and one stray byte desynchronises the client's parser for the whole session. Use `getLogger()` from `src/common/logging.js`, which writes to stderr and redacts credentials; or the MCP logging context (`ctx.mcpReq.log()`). Do not use `console.log`/`console.error` directly: a raw `console.error` stringifies whatever it is handed, and an auth or HTTP failure carries a live session.
+- `initLogging()` runs at the very top of `src/index.ts`, before anything constructs a core manager. Core's loggers are field initializers, and until NEX-3 merely constructing one created `./logs/` in whatever directory the client launched this server from. File logging is now off unless `NEX_LOG_FILE` or `NEX_LOG_DIR` is set.
 
 ## Build & Run
 

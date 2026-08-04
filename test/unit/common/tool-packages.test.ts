@@ -3,6 +3,7 @@ import { resolveToolPackage, reportResolution } from '../../../src/common/tool-p
 import { TOOL_PACKAGES } from '../../../src/config/tool-packages.js'
 import { allToolNames } from '../../../src/tools/registry.js'
 import { TOOL_ANNOTATIONS } from '../../../src/common/annotations.js'
+import { initLogging } from '../../../src/common/logging.js'
 
 describe('resolveToolPackage', () => {
   it('registers everything when unset — the default must not change behaviour', () => {
@@ -137,13 +138,23 @@ describe('resolveToolPackage', () => {
 })
 
 describe('reportResolution', () => {
-  let err: jest.SpiedFunction<typeof console.error>
+  // These used to spy on console.error. Output now goes through core's logger, so
+  // assert on the file descriptor itself — that is the invariant that matters, and
+  // it survives a change of logging library.
+  let err: jest.SpiedFunction<typeof process.stderr.write>
 
-  beforeEach(() => { err = jest.spyOn(console, 'error').mockImplementation(() => {}) })
+  beforeEach(() => {
+    // Without this the console transport sits at core's default of `warn` and the
+    // info-level breadcrumb is correctly suppressed. index.ts does this at boot.
+    initLogging()
+    err = jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
+  })
   afterEach(() => { err.mockRestore() })
 
+  const written = () => err.mock.calls.map((c) => String(c[0])).join('\n')
+
   it('writes to stderr only — stdout is the JSON-RPC transport', () => {
-    const out = jest.spyOn(console, 'log').mockImplementation(() => {})
+    const out = jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
     reportResolution(resolveToolPackage('developer'))
     expect(out).not.toHaveBeenCalled()
     expect(err).toHaveBeenCalled()
@@ -152,22 +163,21 @@ describe('reportResolution', () => {
 
   it('names the available packages when one is unrecognised', () => {
     reportResolution(resolveToolPackage('nonsense'))
-    const text = err.mock.calls.flat().join('\n')
-    expect(text).toMatch(/unknown package/i)
+    const text = written()
+    expect(text).toMatch(/unknown .*package/i)
     expect(text).toContain('service_desk')
     expect(text).toMatch(/falling back/i)
   })
 
   it('explains that skipped tools are expected, not a fault', () => {
     reportResolution(resolveToolPackage('service_desk'))
-    const text = err.mock.calls.flat().join('\n')
-    expect(text).toMatch(/has not landed yet/i)
+    expect(written()).toMatch(/has not landed yet/i)
   })
 
   it('always reports the active package and counts', () => {
     reportResolution(resolveToolPackage('developer'))
-    const text = err.mock.calls.flat().join('\n')
-    expect(text).toMatch(/active: developer/)
+    const text = written()
+    expect(text).toMatch(/active tool package\(s\): developer/i)
     expect(text).toMatch(/\d+ of \d+ tools registered/)
   })
 })
