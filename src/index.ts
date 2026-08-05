@@ -69,6 +69,37 @@ process.on("unhandledRejection", (reason) => {
   log.error("Unhandled rejection", { reason });
 });
 
+/** Longest a shutdown will wait on the logger before giving up on it. */
+const FLUSH_TIMEOUT_MS = 2000;
+
+/**
+ * Flushes buffered log records, then exits — but never lets the flush prevent the exit.
+ *
+ * Awaiting `flushLogs()` unguarded would make termination depend on that promise
+ * settling. Stuck I/O would then turn a graceful SIGTERM into a process that has to be
+ * SIGKILLed, which is strictly worse than the lost log lines this exists to save.
+ * `unref` so a pending timer cannot itself hold the process open.
+ *
+ * The rejection is swallowed on purpose: `void p.finally(cb)` re-throws after running
+ * the callback, so a failing flush would surface as an unhandled rejection during
+ * shutdown. Exiting regardless is the intent, so say so rather than rely on
+ * `process.exit` winning the race against the rejection being reported.
+ */
+async function flushAndExit(code: number): Promise<void> {
+  try {
+    await Promise.race([
+      flushLogs(),
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, FLUSH_TIMEOUT_MS);
+        timer.unref?.();
+      }),
+    ]);
+  } catch {
+    // Nothing useful to do while shutting down; the exit below still happens.
+  }
+  process.exit(code);
+}
+
 // A client stops this server by signalling it, which is the ORDINARY way it exits —
 // not an error path. Winston's file transport buffers, so without a flush here the
 // last records before shutdown are lost whenever NEX_LOG_FILE is on, which is exactly
@@ -78,7 +109,7 @@ process.on("unhandledRejection", (reason) => {
 // rather than queueing another flush.
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
-    void flushLogs().finally(() => process.exit(0));
+    void flushAndExit(0);
   });
 }
 
@@ -92,6 +123,7 @@ async function main(): Promise<void> {
 main().catch((error) => {
   log.error("Fatal error starting server", { error });
   // Flush before exiting: winston buffers, and this is the line that explains why
-  // the server is not there.
-  void flushLogs().finally(() => process.exit(1));
+  // the server is not there. Same timeout guard — a stuck flush must not leave a
+  // failed startup hanging instead of exiting non-zero.
+  void flushAndExit(1);
 });

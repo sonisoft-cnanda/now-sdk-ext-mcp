@@ -180,6 +180,16 @@ maybe("MCP server logging", () => {
         }
     }, 60_000);
 
+    // NOT tested here: that a credential handed to the logger is redacted. It was
+    // attempted and the test was vacuous — the only path in this server that logs an
+    // alias is connection.ts's cache-TTL-expiry debug line, which needs a 30-minute-old
+    // cache entry, so the sentinel never reached a log call and the assertion passed
+    // for the wrong reason. Redaction is core's guarantee and is covered behaviourally
+    // there (test/unit/util/LoggerRedaction.test.ts, which greps the file on disk).
+    // What this repo owns and does test is the WIRING: that errors go to the logger as
+    // structured metadata rather than interpolated into a message, which is what lets
+    // core's redaction see them at all.
+
     it("lets NEX_LOG_FILE=0 override NEX_LOG_DIR", async () => {
         const refused = path.join(workdir, "refused-logs");
         await runServer(workdir, {
