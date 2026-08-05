@@ -57,7 +57,7 @@ export interface ToolAnnotations {
 }
 
 /** Cannot modify anything. */
-const READ: ToolAnnotations = { readOnlyHint: true, openWorldHint: true, verbs: [], target: "instance" };
+const READ: ToolAnnotations = { verbs: [], target: "instance", readOnlyHint: true, openWorldHint: true };
 
 /** Adds something new; nothing pre-existing is lost. Repeating accumulates. */
 const CREATE: ToolAnnotations = { verbs: ["write"], target: "instance", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };

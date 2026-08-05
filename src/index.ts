@@ -45,6 +45,11 @@ const server = new McpServer(
   }
 );
 
+// Intentionally the RAW server, not the guard. MCP resources are representational and
+// read-only — the ServiceNow ones expose scope, update-set and schema — so there is
+// nothing here for a permission check to refuse. Stated explicitly because the loop
+// below deliberately does use the guard, and the difference should not read as an
+// oversight in a security-relevant path.
 registerServiceNowResources(server);
 
 // Tools are registered through the registry rather than 86 direct calls, so a
