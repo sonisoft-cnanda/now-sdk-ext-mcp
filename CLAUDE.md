@@ -40,6 +40,16 @@ The CLI is the reference implementation for how to use the core library. When ad
 - The MCP server MUST NOT write to stdout — it is reserved for JSON-RPC, and one stray byte desynchronises the client's parser for the whole session. Use `getLogger()` from `src/common/logging.js`, which writes to stderr and redacts credentials; or the MCP logging context (`ctx.mcpReq.log()`). Do not use `console.log`/`console.error` directly: a raw `console.error` stringifies whatever it is handed, and an auth or HTTP failure carries a live session.
 - `initLogging()` runs at the very top of `src/index.ts`, before anything constructs a core manager. Core's loggers are field initializers, and until NEX-3 merely constructing one created `./logs/` in whatever directory the client launched this server from. File logging is now off unless `NEX_LOG_FILE` or `NEX_LOG_DIR` is set.
 
+- **Every tool is permission-checked** by a Proxy over `registerTool` installed in
+  `src/index.ts`. Do not change `ToolRegistrar` to pass config — 87 registrations and
+  `registry.test.ts` depend on its current shape. A tool with no entry in
+  `TOOL_ANNOTATIONS` throws at REGISTRATION, so the server will not start.
+- `verbs` and `target` live on `TOOL_ANNOTATIONS` and are stripped by `annotationsFor`
+  before they reach the client. Note `ARBITRARY` is no longer identical to
+  `OVERWRITE_ONCE` — that identity is what made the verb underivable.
+- Refusals are **returned** as `isError` results, never thrown, and must not name a
+  parameter the model could set.
+
 ## Build & Run
 
 ```bash
