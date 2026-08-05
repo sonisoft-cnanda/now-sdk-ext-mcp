@@ -3,6 +3,9 @@ import {
   ServiceNowInstance,
   ServiceNowSettingsInstance,
 } from "@sonisoft/now-sdk-ext-core";
+import { getLogger } from "./logging.js";
+
+const log = getLogger("connection");
 
 /** Cached instance with creation timestamp for TTL expiry. */
 interface CacheEntry {
@@ -54,9 +57,7 @@ export async function getServiceNowInstance(
       return cached.instance;
     }
     // TTL expired — evict and create fresh
-    console.error(
-      `[connection] Cache TTL expired for "${resolvedAlias}", refreshing session`
-    );
+    log.debug("Cache TTL expired, refreshing session", { alias: resolvedAlias });
     instanceCache.delete(resolvedAlias);
   }
 
@@ -168,9 +169,9 @@ export async function withConnectionRetry<T>(
     return await operation(snInstance);
   } catch (error) {
     if (isRetryableError(error)) {
-      console.error(
-        `[connection] Retryable error detected, refreshing session and retrying: ${error}`
-      );
+      // The error went into the message before, unredacted — an auth or HTTP failure
+      // here carries a live session. As metadata it goes through redaction.
+      log.warn("Retryable error, refreshing session and retrying", { error });
       clearInstance(authAlias);
       const freshInstance = await getServiceNowInstance(authAlias);
       return await operation(freshInstance);

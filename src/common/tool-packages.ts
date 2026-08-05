@@ -11,6 +11,10 @@ import { TOOL_PACKAGES, DEFAULT_PACKAGE } from "../config/tool-packages.js";
 import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { allToolNames } from "../tools/registry.js";
 
+import { getLogger } from "./logging.js";
+
+const log = getLogger("tool-packages");
+
 /** Sentinel in a package's `tools` meaning "everything". */
 const ALL = "*";
 
@@ -129,29 +133,31 @@ export function resolveToolPackage(selection: string | undefined): ResolvedPacka
  * Reports the resolution on stderr.
  *
  * stderr, never stdout — stdout is the JSON-RPC transport, and a stray byte
- * there breaks the client's parser.
+ * there breaks the client's parser. Goes through the logger so it obeys
+ * NEX_LOG_LEVEL and reaches the log file when one is configured; these are the
+ * breadcrumbs that explain why a client sees the tools it sees.
  */
 export function reportResolution(resolved: ResolvedPackage): void {
     const { names, tools, unknownPackages, unknownTools, fellBack } = resolved;
 
     if (unknownPackages.length > 0) {
         const available = Object.keys(TOOL_PACKAGES).sort().join(", ");
-        console.error(
-            `[tool-packages] unknown package(s): ${unknownPackages.join(", ")}. ` +
+        log.warn(
+            `Unknown tool package(s): ${unknownPackages.join(", ")}. ` +
                 `Available: ${available}.` +
                 (fellBack ? ` Falling back to "${DEFAULT_PACKAGE}".` : ""),
         );
     }
 
     if (unknownTools.length > 0) {
-        console.error(
-            `[tool-packages] ${unknownTools.length} tool(s) named by a package do not exist ` +
+        log.warn(
+            `${unknownTools.length} tool(s) named by a package do not exist ` +
                 `on this server and were skipped: ${unknownTools.join(", ")}. ` +
                 `This is expected for tools from work that has not landed yet.`,
         );
     }
 
-    console.error(
-        `[tool-packages] active: ${names.join(", ")} — ${tools.length} of ${allToolNames().length} tools registered`,
+    log.info(
+        `Active tool package(s): ${names.join(", ")} — ${tools.length} of ${allToolNames().length} tools registered`,
     );
 }

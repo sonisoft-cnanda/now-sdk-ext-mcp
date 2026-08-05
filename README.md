@@ -398,7 +398,15 @@ Since stdout is reserved for JSON-RPC, **never use `console.log()` in server cod
 
 - **`console.error()`** — writes to stderr, which is safe and visible in the MCP Inspector's Notifications pane and in Claude Desktop's log files (`~/Library/Logs/Claude/mcp*.log`).
 - **MCP Inspector** — run the server under the inspector to see all JSON-RPC messages and stderr output in real time.
-- **File logging** — for persistent debug logs, the core library's `Logger` class writes to `logs/` with Winston. Set the log level via the tool's logic as needed.
+- **File logging** — off by default. This server's working directory is chosen by whoever launched it, so it writes no files unless asked. Configure with environment variables:
+
+  | Variable | Effect |
+  | --- | --- |
+  | `NEX_LOG_FILE` | `1`/`true` writes a log file to `$XDG_STATE_HOME/now-sdk-ext/logs` (`~/.local/state/...`) |
+  | `NEX_LOG_DIR` | Write log files to this directory instead. Implies `NEX_LOG_FILE` |
+  | `NEX_LOG_LEVEL` | `error`, `warn`, `info` (default), `http`, `verbose`, `debug`, `silly` |
+
+  Diagnostics always go to **stderr**, never stdout — stdout carries JSON-RPC. Credential material is stripped from both metadata and message text before anything is written.
 
 ### Code Conventions
 

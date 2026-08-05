@@ -155,3 +155,16 @@ export interface ServiceNowSettingsInstance {
   alias?: string
   credential: any
 }
+
+// Logging surface. Anything importing src/common/logging.js pulls these in, and a
+// missing export fails the whole module graph rather than one assertion.
+export class Logger {
+  debug = jest.fn()
+  error = jest.fn()
+  info = jest.fn()
+  warn = jest.fn()
+  constructor(_name?: string) {}
+}
+
+export const configureLogging = jest.fn()
+export const flushLogs = jest.fn(() => Promise.resolve())

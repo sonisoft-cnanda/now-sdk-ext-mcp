@@ -20,6 +20,10 @@
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import type { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
 
+import { getLogger } from "./logging.js";
+
+const log = getLogger("progress");
+
 export type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 
 /** Signature core expects. Matches BatchCreateOptions.onProgress and friends. */
@@ -58,9 +62,9 @@ export function progressReporter(extra: ToolExtra | undefined): ProgressCallback
                 message,
             },
         }).catch((error: unknown) => {
-            const detail = error instanceof Error ? error.message : String(error);
-            // stderr, never stdout: stdout is the JSON-RPC transport.
-            console.error(`[progress] failed to send notification: ${detail}`);
+            // stderr, never stdout: stdout is the JSON-RPC transport. Via the logger
+            // so the error is redacted rather than stringified into the message.
+            log.debug("Failed to send progress notification", { error });
         });
     };
 }
