@@ -175,6 +175,45 @@ describe("guardServer", () => {
         expect(called).toBe(true);
     });
 
+    it("lets a LOCAL-target write through even when instance writes are denied", async () => {
+        // The behaviour, not the metadata. `requirementFor("pull_script").target ===
+        // "local"` only proves the classification; this proves the classification
+        // actually changes what happens. pull_script overwrites a file on disk and
+        // touches no instance data, so refusing it would be a false refusal — and that
+        // is precisely the claim the reclassification was made to support.
+        installPolicy([denyLayer("test-deny", ["write", "execute"])]);
+        const server = fakeServer();
+        const guarded = guardServer(server as never);
+
+        let called = false;
+        (guarded as unknown as ReturnType<typeof fakeServer>).registerTool("pull_script", {}, async () => {
+            called = true;
+            return { content: [] };
+        });
+
+        const result = (await server.handlers.get("pull_script")!()) as { isError?: boolean };
+        expect(called).toBe(true);
+        expect(result.isError).toBeUndefined();
+    });
+
+    it("still refuses push_script, which DOES write to the instance", async () => {
+        // The other half of the pair — otherwise "local target is not gated" could be
+        // satisfied by the guard simply not working for script-sync tools at all.
+        installPolicy([denyLayer("test-deny", ["write"])]);
+        const server = fakeServer();
+        const guarded = guardServer(server as never);
+
+        let called = false;
+        (guarded as unknown as ReturnType<typeof fakeServer>).registerTool("push_script", {}, async () => {
+            called = true;
+            return { content: [] };
+        });
+
+        const result = (await server.handlers.get("push_script")!()) as { isError?: boolean };
+        expect(called).toBe(false);
+        expect(result.isError).toBe(true);
+    });
+
     it("refuses to register an unclassified tool, at STARTUP", () => {
         // Fails when the server boots rather than on first call in front of a user.
         const server = fakeServer();

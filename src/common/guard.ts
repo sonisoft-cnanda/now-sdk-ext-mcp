@@ -106,6 +106,12 @@ function refusalResult(toolName: string, verbs: readonly Verb[], layer: string):
 export function guardServer(server: McpServer): McpServer {
     return new Proxy(server, {
         get(target, property, receiver) {
+            // Function results are rebound to `target` below, which sidesteps the
+            // classic Proxy-vs-#private brand-check failure for METHODS. Non-function
+            // properties are still read with `receiver = proxy`, so if a future SDK
+            // version adds an accessor that touches a real `#private` field, reading it
+            // through the guard would throw. Nothing does today — TS `private` alone is
+            // not a real private field — but it is a hard failure to trace back here.
             const value = Reflect.get(target, property, receiver) as unknown;
             if (property !== "registerTool" || typeof value !== "function") {
                 return typeof value === "function" ? value.bind(target) : value;

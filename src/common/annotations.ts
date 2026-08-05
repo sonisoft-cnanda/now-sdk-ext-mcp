@@ -244,16 +244,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     import_records_xml: OVERWRITE_ONCE,
 };
 
-/**
- * Annotations for a tool.
- *
- * Throws on an unknown name rather than returning a permissive default. An
- * unannotated tool would silently inherit the spec defaults — `readOnlyHint`
- * false, `destructiveHint` TRUE — which is safe, but it would also mean a new
- * tool could ship with no deliberate classification and nobody would notice.
- * Failing at registration makes that impossible.
- */
-/** The permission requirement for a tool. Throws on an unknown name, like annotationsFor. */
+/** What permission a tool needs. Throws on an unknown name — see `lookup`. */
 export function requirementFor(toolName: string): Requirement {
     const annotations = lookup(toolName);
     return {
@@ -262,7 +253,15 @@ export function requirementFor(toolName: string): Requirement {
     };
 }
 
-/** The raw table entry, including the non-MCP fields. */
+/**
+ * The raw table entry, including the non-MCP fields.
+ *
+ * Throws on an unknown name rather than returning a permissive default. An unannotated
+ * tool would silently inherit the spec defaults — `readOnlyHint` false,
+ * `destructiveHint` TRUE — which is safe on the wire, but it would also mean a new tool
+ * could ship with no deliberate permission classification and nobody would notice.
+ * Because the guard calls this at REGISTRATION, failing here stops the server booting.
+ */
 function lookup(toolName: string): ToolAnnotations {
     // hasOwnProperty, not bracket access: TOOL_ANNOTATIONS["constructor"] would
     // otherwise return the Object constructor — truthy — and this would hand back
