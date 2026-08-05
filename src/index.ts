@@ -86,16 +86,21 @@ const FLUSH_TIMEOUT_MS = 2000;
  * `process.exit` winning the race against the rejection being reported.
  */
 async function flushAndExit(code: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
   try {
     await Promise.race([
       flushLogs(),
       new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, FLUSH_TIMEOUT_MS);
+        timer = setTimeout(resolve, FLUSH_TIMEOUT_MS);
         timer.unref?.();
       }),
     ]);
   } catch {
     // Nothing useful to do while shutting down; the exit below still happens.
+  } finally {
+    // Tidy even though process.exit follows: leaving it dangling would be one more
+    // thing to reason about if this ever grows a path that does not exit.
+    if (timer) clearTimeout(timer);
   }
   process.exit(code);
 }
