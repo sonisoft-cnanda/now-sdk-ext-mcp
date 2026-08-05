@@ -36,6 +36,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Without this the action refuses bot-authored PRs outright ("Workflow
+          # initiated by non-human actor"), so every Dependabot PR carried a red X
+          # that meant nothing — which is how people learn to merge past red checks.
+          allowed_bots: '*'
           prompt: |
             Review PR #${{ github.event.pull_request.number }} in this repository.
             Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes.
