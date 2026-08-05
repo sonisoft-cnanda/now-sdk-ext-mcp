@@ -44,7 +44,26 @@ export function initLogging(): void {
     });
 }
 
-/** Returns a named logger. Safe before `initLogging` — core resolves config lazily. */
+/**
+ * Returns a named logger.
+ *
+ * Safe to call before `initLogging()`, and several modules do: ES modules evaluate
+ * every import before the importing module's own top-level statements, so the
+ * `const log = getLogger(...)` in connection.ts, progress.ts and tool-packages.ts all
+ * run BEFORE the `initLogging()` call in index.ts, even though it sits above them in
+ * source order.
+ *
+ * That is fine because nothing is decided at construction time. `Logger` only stores a
+ * label; core builds the underlying winston logger on the first WRITE, resolves config
+ * lazily at that point, and rebuilds when configuration changes. So a logger built
+ * during import picks up whatever `initLogging()` sets, provided nothing logs during
+ * module evaluation — and nothing does.
+ *
+ * This is not left to inspection: the "still reports startup breadcrumbs on stderr"
+ * case in test/unit/common/logging.test.ts only passes if `consoleLevel: info` from
+ * `initLogging()` reached a logger that was constructed before it ran. Core's default
+ * is `warn`, which would suppress those lines.
+ */
 export function getLogger(name: string): Logger {
     return new Logger(name);
 }

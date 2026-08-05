@@ -74,6 +74,9 @@ Every tool that interacts with a ServiceNow instance should include an optional 
 | `SN_CRED_STORE` | `systemd-creds` | Credential store backend: `systemd-creds`, `file`, or `auto` |
 | `SN_CRED_STORE_PATH` | _(XDG state dir)_ | Override the credential store location |
 | `SN_CRED_STORE_DEBUG` | _(unset)_ | Verbose credential-store diagnostics on stderr |
+| `NEX_LOG_FILE` | _(off)_ | `1`/`true` writes a log file to `$XDG_STATE_HOME/now-sdk-ext/logs`. Off by default — this server's cwd is chosen by its client |
+| `NEX_LOG_DIR` | _(state dir)_ | Directory for log files. Implies `NEX_LOG_FILE`; an explicit `NEX_LOG_FILE=0` still wins |
+| `NEX_LOG_LEVEL` | `info` | `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`. Diagnostics always go to stderr, never stdout |
 
 ## Credential Storage
 

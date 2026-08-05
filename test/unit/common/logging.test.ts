@@ -68,6 +68,37 @@ function runServer(cwd: string, env: NodeJS.ProcessEnv): Promise<RunResult> {
     });
 }
 
+/** Boots the server, waits for it to come up, then signals it — the ordinary exit path. */
+function runServerAndSignal(
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+    signal: NodeJS.Signals,
+): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const childEnv = { ...process.env, ...env };
+        delete childEnv.NODE_ENV;
+        for (const key of Object.keys(childEnv)) {
+            if (key.startsWith("JEST_")) delete childEnv[key];
+        }
+
+        const child = spawn(process.execPath, [SERVER], { cwd, env: childEnv });
+        let stderr = "";
+        child.stderr.on("data", (d: Buffer) => {
+            stderr += d.toString();
+            // Signal as soon as it is up. Deliberately no settle delay: even ~150ms is
+            // enough for winston to flush on its own, and this test then passes with the
+            // signal handler removed — proving nothing. The window this guards is narrow
+            // by nature, so the test has to aim at it.
+            if (stderr.includes("running on stdio")) child.kill(signal);
+        });
+        child.on("error", reject);
+        child.on("close", () => resolve());
+
+        const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
+        child.on("close", () => clearTimeout(timer));
+    });
+}
+
 // `npm run test:unit` does not build; skip rather than fail misleadingly.
 const maybe = BUILT ? describe : describe.skip;
 
@@ -123,6 +154,27 @@ maybe("MCP server logging", () => {
             const logFile = path.join(stateDir, "now-sdk-ext", "logs", "nex.log");
             expect(fs.existsSync(logFile)).toBe(true);
             expect(fs.existsSync(path.join(workdir, "logs"))).toBe(false);
+        } finally {
+            fs.rmSync(stateDir, { force: true, recursive: true });
+        }
+    }, 60_000);
+
+    it("flushes buffered log lines when the client signals it to stop", async () => {
+        // A client stops this server with a signal; that is the ordinary exit, not an
+        // error path. Winston's file transport buffers, so without a flush on SIGTERM
+        // the last records vanish precisely when someone is reading the file.
+        const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "nex-mcp-sig-"));
+        try {
+            await runServerAndSignal(
+                workdir,
+                { NEX_LOG_FILE: "1", NEX_LOG_LEVEL: "debug", XDG_STATE_HOME: stateDir },
+                "SIGTERM",
+            );
+
+            const logFile = path.join(stateDir, "now-sdk-ext", "logs", "nex.log");
+            expect(fs.existsSync(logFile)).toBe(true);
+            const contents = fs.readFileSync(logFile, "utf8");
+            expect(contents).toContain("running on stdio");
         } finally {
             fs.rmSync(stateDir, { force: true, recursive: true });
         }

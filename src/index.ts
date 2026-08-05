@@ -69,6 +69,19 @@ process.on("unhandledRejection", (reason) => {
   log.error("Unhandled rejection", { reason });
 });
 
+// A client stops this server by signalling it, which is the ORDINARY way it exits —
+// not an error path. Winston's file transport buffers, so without a flush here the
+// last records before shutdown are lost whenever NEX_LOG_FILE is on, which is exactly
+// when someone is reading the file to find out what happened.
+//
+// `once`, so a second signal from an impatient client still terminates immediately
+// rather than queueing another flush.
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    void flushLogs().finally(() => process.exit(0));
+  });
+}
+
 // Start the server on stdio transport
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
