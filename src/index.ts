@@ -12,6 +12,12 @@ import { flushLogs } from "@sonisoft/now-sdk-ext-core";
 import { initLogging, getLogger } from "./common/logging.js";
 initLogging();
 
+// Third, before any tool is registered: the permission ladder. Changes are permitted
+// by default; NEX_POLICY_DENY in the server's environment is what restricts them, and
+// it is the only layer the model cannot reach.
+import { guardServer, initPolicy } from "./common/guard.js";
+initPolicy();
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerServiceNowResources } from "./resources/servicenow.js";
 import { TOOL_REGISTRY } from "./tools/registry.js";
@@ -39,6 +45,11 @@ const server = new McpServer(
   }
 );
 
+// Intentionally the RAW server, not the guard. MCP resources are representational and
+// read-only — the ServiceNow ones expose scope, update-set and schema — so there is
+// nothing here for a permission check to refuse. Stated explicitly because the loop
+// below deliberately does use the guard, and the difference should not read as an
+// oversight in a security-relevant path.
 registerServiceNowResources(server);
 
 // Tools are registered through the registry rather than 86 direct calls, so a
@@ -48,14 +59,18 @@ registerServiceNowResources(server);
 const activePackage = resolveToolPackage(process.env.MCP_TOOL_PACKAGE);
 reportResolution(activePackage);
 
+// Registered through the guard, not the server directly. The Proxy intercepts
+// registerTool and wraps each handler with a permission check — a tool cannot opt out,
+// and an unclassified tool fails at startup rather than on first use.
+const guarded = guardServer(server);
 for (const name of activePackage.tools) {
-  TOOL_REGISTRY[name](server);
+  TOOL_REGISTRY[name](guarded);
 }
 
 // Always registered, whatever the package. A filtered session otherwise has no
 // way to tell "this server cannot do that" from "that tool is filtered out of
 // this session".
-registerListToolPackagesTool(server, activePackage);
+registerListToolPackagesTool(guarded, activePackage);
 
 
 // Prevent the process from crashing silently on unexpected errors.

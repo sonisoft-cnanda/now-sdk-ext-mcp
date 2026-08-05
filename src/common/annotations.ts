@@ -1,3 +1,5 @@
+import { Requirement, Target, Verb } from "@sonisoft/now-sdk-ext-core";
+
 /**
  * Tool annotations — the machine-readable risk classification for every tool.
  *
@@ -42,22 +44,32 @@ export interface ToolAnnotations {
     destructiveHint?: boolean;
     idempotentHint?: boolean;
     openWorldHint?: boolean;
+    /**
+     * What permission this tool needs. NOT part of MCP — `annotationsFor` strips both
+     * of these before the annotations go over the wire.
+     *
+     * Carried here rather than in a second table because the completeness test already
+     * guarantees every registered tool appears in TOOL_ANNOTATIONS, so a new tool
+     * cannot arrive without a classification. A parallel table would drift.
+     */
+    verbs?: readonly Verb[];
+    target?: Target;
 }
 
 /** Cannot modify anything. */
-const READ: ToolAnnotations = { readOnlyHint: true, openWorldHint: true };
+const READ: ToolAnnotations = { verbs: [], target: "instance", readOnlyHint: true, openWorldHint: true };
 
 /** Adds something new; nothing pre-existing is lost. Repeating accumulates. */
-const CREATE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+const CREATE: ToolAnnotations = { verbs: ["write"], target: "instance", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 
 /** Sets state to a given value. Nothing is destroyed; repeating is a no-op. */
-const SET: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true };
+const SET: ToolAnnotations = { verbs: ["write"], target: "instance", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
 /** Overwrites or removes data that already existed. Repeating settles. */
-const OVERWRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true };
+const OVERWRITE: ToolAnnotations = { verbs: ["write"], target: "instance", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true };
 
 /** Overwrites or removes, and repeating does NOT settle. */
-const OVERWRITE_ONCE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
+const OVERWRITE_ONCE: ToolAnnotations = { verbs: ["write"], target: "instance", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
 
 /**
  * Runs caller-supplied logic — a script or a flow someone else authored.
@@ -67,7 +79,16 @@ const OVERWRITE_ONCE: ToolAnnotations = { readOnlyHint: false, destructiveHint: 
  * tools are in that category; the warning that actually reaches the model is in
  * the tool description.
  */
-const ARBITRARY: ToolAnnotations = OVERWRITE_ONCE;
+const ARBITRARY: ToolAnnotations = {
+    ...OVERWRITE_ONCE,
+    // The MCP hints stay identical to OVERWRITE_ONCE — the protocol has no hint for
+    // "unbounded effect". What differs is the permission: running caller-supplied or
+    // third-party logic needs `execute`, and it can write, so it needs both.
+    verbs: ["execute", "write"],
+};
+
+/** Writes to the LOCAL filesystem. Read-only with respect to the instance. */
+const LOCAL_WRITE: ToolAnnotations = { ...OVERWRITE, target: "local" };
 
 export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // ---- meta: reports this server's own configuration, touches no instance.
@@ -96,8 +117,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // ---- ATF: tests execute real logic against the instance and routinely
     // create and modify records as part of running.
     find_atf_tests: READ,
-    run_atf_test: OVERWRITE_ONCE,
-    run_atf_test_suite: OVERWRITE_ONCE,
+    run_atf_test: ARBITRARY,
+    run_atf_test_suite: ARBITRARY,
 
     // ---- attachments
     list_attachments: READ,
@@ -191,7 +212,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // Writes to the LOCAL filesystem and will overwrite an existing file. Read-only
     // with respect to ServiceNow, but "read-only" means the environment, not the
     // instance.
-    pull_script: OVERWRITE,
+    pull_script: LOCAL_WRITE,
     // Overwrites the script record on the instance.
     push_script: OVERWRITE,
 
@@ -223,16 +244,25 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     import_records_xml: OVERWRITE_ONCE,
 };
 
+/** What permission a tool needs. Throws on an unknown name — see `lookup`. */
+export function requirementFor(toolName: string): Requirement {
+    const annotations = lookup(toolName);
+    return {
+        verbs: annotations.verbs ?? ["write"],
+        target: annotations.target ?? "instance",
+    };
+}
+
 /**
- * Annotations for a tool.
+ * The raw table entry, including the non-MCP fields.
  *
- * Throws on an unknown name rather than returning a permissive default. An
- * unannotated tool would silently inherit the spec defaults — `readOnlyHint`
- * false, `destructiveHint` TRUE — which is safe, but it would also mean a new
- * tool could ship with no deliberate classification and nobody would notice.
- * Failing at registration makes that impossible.
+ * Throws on an unknown name rather than returning a permissive default. An unannotated
+ * tool would silently inherit the spec defaults — `readOnlyHint` false,
+ * `destructiveHint` TRUE — which is safe on the wire, but it would also mean a new tool
+ * could ship with no deliberate permission classification and nobody would notice.
+ * Because the guard calls this at REGISTRATION, failing here stops the server booting.
  */
-export function annotationsFor(toolName: string): ToolAnnotations {
+function lookup(toolName: string): ToolAnnotations {
     // hasOwnProperty, not bracket access: TOOL_ANNOTATIONS["constructor"] would
     // otherwise return the Object constructor — truthy — and this would hand back
     // a function instead of throwing.
@@ -246,4 +276,12 @@ export function annotationsFor(toolName: string): ToolAnnotations {
         );
     }
     return annotations;
+}
+
+/** The annotations sent to the client. */
+export function annotationsFor(toolName: string): ToolAnnotations {
+    // `verbs` and `target` are ours, not MCP's. Strip them here so nothing
+    // non-standard reaches the client — the wire shape is unchanged by this feature.
+    const { verbs: _verbs, target: _target, ...wire } = lookup(toolName);
+    return wire;
 }

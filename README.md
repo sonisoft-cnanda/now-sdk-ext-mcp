@@ -266,6 +266,35 @@ This MCP server wraps the same core library used by the CLI:
 
 When adding new MCP tools, reference the corresponding CLI command in `now-sdk-ext-cli/src/commands/` for the expected behavior and data flow.
 
+## Restricting what can be changed
+
+Instance changes are **permitted by default**. Set `NEX_POLICY_DENY` in the server's
+environment to refuse them:
+
+```json
+{
+  "mcpServers": {
+    "now-sdk-ext": {
+      "command": "now-sdk-ext-mcp",
+      "env": { "NEX_POLICY_DENY": "all" }
+    }
+  }
+}
+```
+
+Refused tools return an error result explaining that nothing was changed; read-only
+tools are unaffected. There is deliberately **no tool parameter** to grant permission —
+on this surface the caller is the model, so a parameter it can set would not be a
+control.
+
+> `NEX_POLICY_DENY` only holds when set somewhere the model cannot write. The config
+> file above usually lives **in the workspace**, and an agent with file-write access can
+> edit it. For a real lockdown set it in the environment that launches the client — a
+> shell profile, a systemd unit, or a container env.
+>
+> This is a guardrail, not a security boundary. Anything holding the credential can
+> reach the instance directly.
+
 ## Contributing
 
 ### Testing
@@ -405,6 +434,8 @@ Since stdout is reserved for JSON-RPC, **never use `console.log()` in server cod
   | `NEX_LOG_FILE` | `1`/`true` writes a log file to `$XDG_STATE_HOME/now-sdk-ext/logs` (`~/.local/state/...`) |
   | `NEX_LOG_DIR` | Write log files to this directory instead. Implies `NEX_LOG_FILE` |
   | `NEX_LOG_LEVEL` | `error`, `warn`, `info` (default), `http`, `verbose`, `debug`, `silly` |
+  | `NEX_POLICY_DENY` | `write`, `execute`, or `all` — refuses matching instance changes. Malformed values **fail closed** |
+  | `NEX_POLICY_ALLOW` | Grants verbs. Inert while changes are permitted by default |
 
   Diagnostics always go to **stderr**, never stdout — stdout carries JSON-RPC. Credential material is stripped from both metadata and message text before anything is written.
 
