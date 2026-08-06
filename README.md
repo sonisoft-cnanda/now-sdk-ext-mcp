@@ -128,7 +128,7 @@ Add to your `.claude/settings.json` or project-level `.mcp.json`:
 
 ### Opencode
 
-Add to your `.config/opencode/opencode.json` or project-level `opencode.jsonc`
+Add to your `.config/opencode/opencode.json` or project-level `opencode.jsonc`:
 
 ```json
 {
@@ -138,6 +138,24 @@ Add to your `.config/opencode/opencode.json` or project-level `opencode.jsonc`
       "command": ["node", "/absolute/path/to/now-sdk-ext-mcp/dist/index.js"],
       "enabled": true,
       "environment": {
+        "SN_AUTH_ALIAS": "myinstance"
+      }
+    }
+  }
+}
+```
+
+### Gemini CLI
+
+Add to your `~/.gemini/settings.json` or project-level `.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "servicenow": {
+      "command": "node",
+      "args": ["/absolute/path/to/now-sdk-ext-mcp/dist/index.js"],
+      "env": {
         "SN_AUTH_ALIAS": "myinstance"
       }
     }
