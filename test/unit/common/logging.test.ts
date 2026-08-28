@@ -85,11 +85,14 @@ function runServerAndSignal(
         let stderr = "";
         child.stderr.on("data", (d: Buffer) => {
             stderr += d.toString();
-            // Signal as soon as it is up. Deliberately no settle delay: even ~150ms is
-            // enough for winston to flush on its own, and this test then passes with the
-            // signal handler removed — proving nothing. The window this guards is narrow
-            // by nature, so the test has to aim at it.
-            if (stderr.includes("running on stdio")) child.kill(signal);
+            // Signal as soon as it is up, but not re-entrantly from the pipe callback.
+            // GitHub Actions can deliver stderr while winston is still unwinding the
+            // write that produced it; signalling in that callback races the record into
+            // the file transport. One event-loop turn preserves the narrow shutdown
+            // window without adding a settle delay that would make the flush test vacuous.
+            if (stderr.includes("running on stdio")) {
+                setImmediate(() => child.kill(signal));
+            }
         });
         child.on("error", reject);
         child.on("close", () => resolve());
