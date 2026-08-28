@@ -79,13 +79,17 @@ try {
   });
   const failureText = JSON.stringify(failure);
   assert.equal(failure.isError, true);
-  // The credstore shim owns this failure before connection.ts can handle a null
-  // result. Assert the stable contract instead of the dependency's exact prose.
+  // This is a stored-credential miss for an explicit alias, not the separate
+  // no-alias-supplied path. The credstore shim owns this failure before
+  // connection.ts can handle a null result, so assert the stable contract
+  // instead of the dependency's exact prose.
   assert.match(failureText, /credential/i);
   assert.match(failureText, /missing-fixture/);
 
   const observableOutput = `${successText}\n${failureText}\n${stderr}`;
   assert(!observableOutput.includes(fixturePassword), "credential material crossed the MCP/log boundary");
+  // Intentional 1.1.0 integration check: this diagnostic proves the file-store
+  // shim was installed rather than silently falling back to the OS keyring.
   assert.match(stderr, /\[sn-credstore\] shim installed \(store: file/);
 
   process.stderr.write("credstore MCP eval passed: alias resolution, read-only tool use, failure handling, and secret non-disclosure\n");
