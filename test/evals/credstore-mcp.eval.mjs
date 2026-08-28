@@ -77,17 +77,21 @@ try {
     name: "query_table",
     arguments: { instance: "missing-fixture", table: "incident", limit: 1 },
   });
+  const failureText = JSON.stringify(failure);
   assert.equal(failure.isError, true);
-  assert.match(JSON.stringify(failure), /Could not find stored credentials for alias/);
+  // The credstore shim owns this failure before connection.ts can handle a null
+  // result. Assert the stable contract instead of the dependency's exact prose.
+  assert.match(failureText, /credential/i);
+  assert.match(failureText, /missing-fixture/);
 
-  const observableOutput = `${successText}\n${JSON.stringify(failure)}\n${stderr}`;
+  const observableOutput = `${successText}\n${failureText}\n${stderr}`;
   assert(!observableOutput.includes(fixturePassword), "credential material crossed the MCP/log boundary");
   assert.match(stderr, /\[sn-credstore\] shim installed \(store: file/);
 
   process.stderr.write("credstore MCP eval passed: alias resolution, read-only tool use, failure handling, and secret non-disclosure\n");
 } catch (error) {
-  assert(!stderr.includes(fixturePassword), "credential material appeared in startup diagnostics");
   process.stderr.write(stderr);
+  assert(!stderr.includes(fixturePassword), "credential material appeared in startup diagnostics");
   throw error;
 } finally {
   await client?.close().catch(() => {});
