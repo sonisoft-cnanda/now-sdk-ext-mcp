@@ -30,3 +30,7 @@ jobs:
 
       - name: Unit tests
         run: npm run test:unit
+
+      - name: Credential store MCP eval
+        timeout-minutes: 5
+        run: npm run eval:credstore
