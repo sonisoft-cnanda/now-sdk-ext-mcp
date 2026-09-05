@@ -21,6 +21,7 @@ jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
     warn: jest.fn(),
   })),
   configureLogging: jest.fn(),
+  redactValue: jest.fn((value: unknown) => value),
   flushLogs: jest.fn(() => Promise.resolve()),
 }))
 

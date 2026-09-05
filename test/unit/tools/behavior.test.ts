@@ -49,6 +49,12 @@ describe('behavior tools through MCP', () => {
     expect(result.isError).toBe(true);
     expect(retry).not.toHaveBeenCalled();
   });
+  it.each(['sys_script^ORactive=true', '../sys_user', ''])('rejects malformed source tables before connecting: %s', async sourceTable => {
+    const result = await client.callTool({ name: 'get_behavior_details', arguments: { references: [{ kind: 'business_rules', sourceTable, sysId: 'a'.repeat(32) }] } });
+    expect(result.isError).toBe(true);
+    expect(retry).not.toHaveBeenCalled();
+    expect(details).not.toHaveBeenCalled();
+  });
   it('surfaces read failures without claiming an empty inventory', async () => {
     discover.mockRejectedValue(new Error('Authentication failed'));
     const result = await client.callTool({ name: 'discover_table_behavior', arguments: { table: 'incident' } });

@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
-import { execFileSync, spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -130,17 +130,25 @@ maybe("MCP server logging", () => {
         }
     }, 60_000);
 
-    it("silences SDK refresh diagnostics before credential reads", () => {
+    it.each(["info", "error"])("routes redacted SDK diagnostics to stderr at level %s", level => {
         const script = `
 import { initLogging } from ${JSON.stringify(path.join(REPO, "dist/common/logging.js"))};
 import { logger } from ${JSON.stringify(path.join(REPO, "node_modules/@servicenow/sdk-cli/dist/logger/index.js"))};
+import { flushLogs } from ${JSON.stringify(path.join(REPO, "node_modules/@sonisoft/now-sdk-ext-core/dist/index.js"))};
 initLogging();
 logger.info('Access Token has expired, refreshing token');
-logger.error('Simulated refresh failure');
+logger.error('Simulated refresh failure', {password: 'fixture-sdk-password'}, new Error('Bearer fixture-sdk-bearer'));
+await flushLogs();
 process.stdout.write(JSON.stringify({ok: true}));
 `;
-        const stdout = execFileSync(process.execPath, ["--input-type=module", "-e", script], { cwd: workdir, encoding: "utf8", timeout: 10000 });
-        expect(JSON.parse(stdout)).toEqual({ok: true});
+        const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: workdir, encoding: "utf8", timeout: 10000, env: {...process.env, NEX_LOG_LEVEL: level} });
+        expect(result.status).toBe(0);
+        expect(JSON.parse(result.stdout)).toEqual({ok: true});
+        expect(result.stderr).toContain('Simulated refresh failure');
+        expect(result.stderr).toContain('[redacted]');
+        expect(result.stderr).not.toContain('fixture-sdk-password');
+        expect(result.stderr).not.toContain('fixture-sdk-bearer');
+        expect(result.stderr.includes('Access Token has expired')).toBe(level === 'info');
     });
 
     it("creates no logs/ directory in the directory it was launched from", async () => {

@@ -64,7 +64,7 @@ export function registerGetBehaviorDetailsTool(server: McpServer): void {
       ...controls,
       references: z.array(z.object({
         kind: z.enum([...BEHAVIOR_CATEGORIES, "subflow", "action", "script_include", "decision_table"]),
-        sourceTable: z.string().describe("Source metadata table from discovery, e.g. sys_script or sys_hub_flow."),
+        sourceTable: z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]*$/).describe("Source metadata table from discovery, e.g. sys_script or sys_hub_flow. Core validates allowed kind/table pairs."),
         sysId: z.string().regex(/^[a-f0-9]{32}$/i),
       })).min(1).max(50),
     },
