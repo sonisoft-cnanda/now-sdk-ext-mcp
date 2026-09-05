@@ -16,7 +16,8 @@
  * process may ever write to fd 1.
  */
 
-import { Logger, configureLogging } from "@sonisoft/now-sdk-ext-core";
+import { Logger, configureLogging, redactValue } from "@sonisoft/now-sdk-ext-core";
+import { logger as sdkLogger } from "@servicenow/sdk-cli/dist/logger/index.js";
 
 let configured = false;
 
@@ -42,6 +43,18 @@ export function initLogging(): void {
         // File logging stays off unless NEX_LOG_FILE/NEX_LOG_DIR asks for it. Core
         // resolves those; naming them here would override an operator's NEX_LOG_FILE=0.
     });
+    const sdkLog = getLogger("ServiceNow SDK");
+    sdkLogger.setLevel("silent");
+    for (const level of ["info", "warn", "error", "debug"] as const) {
+        sdkLogger[level] = (...args: unknown[]): void => {
+            const message = args.map(arg => {
+                if (typeof arg === "string") return arg;
+                try { return JSON.stringify(redactValue(arg)) ?? String(arg); }
+                catch { return "[unserializable]"; }
+            }).join(" ");
+            sdkLog[level](message || "ServiceNow SDK");
+        };
+    }
 }
 
 /**

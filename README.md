@@ -4,6 +4,8 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact di
 
 Built on [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) and [`@sonisoft/now-sdk-ext-core`](https://git.sonisoft.io).
 
+Use [table behavior discovery](docs/table-behavior.md) to inspect automation, field requirements, and related artifact details.
+
 ## Quick Start
 
 ### Prerequisites

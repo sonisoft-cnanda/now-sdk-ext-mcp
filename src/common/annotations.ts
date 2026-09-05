@@ -200,6 +200,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
 
     // ---- schema
     discover_table_schema: READ,
+    discover_table_behavior: READ,
+    get_behavior_details: READ,
     explain_field: READ,
     validate_catalog: READ,
 

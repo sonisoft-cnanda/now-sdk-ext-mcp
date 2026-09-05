@@ -167,4 +167,5 @@ export class Logger {
 }
 
 export const configureLogging = jest.fn()
+export const redactValue = jest.fn((value: unknown) => value)
 export const flushLogs = jest.fn(() => Promise.resolve())

@@ -46,6 +46,7 @@ import {
   registerBatchCreateRecordsTool,
   registerBatchUpdateRecordsTool,
 } from "../tools/batch.js";
+import { registerDiscoverTableBehaviorTool, registerGetBehaviorDetailsTool } from "../tools/behavior.js";
 import {
   registerGetCatalogCategoryTool,
   registerGetCatalogItemTool,
@@ -201,6 +202,8 @@ export const TOOL_REGISTRY: Record<string, ToolRegistrar> = {
   code_search: registerCodeSearchTool,
   list_code_search_groups: registerListCodeSearchGroupsTool,
   list_code_search_tables: registerListCodeSearchTablesTool,
+  discover_table_behavior: registerDiscoverTableBehaviorTool,
+  get_behavior_details: registerGetBehaviorDetailsTool,
   // ---- discovery
   list_instance_tables: registerListInstanceTablesTool,
   list_plugins: registerListPluginsTool,
