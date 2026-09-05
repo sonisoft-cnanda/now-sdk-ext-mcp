@@ -75,11 +75,36 @@ Before your agent can use the MCP server, ensure:
 
 2. **Auth aliases are configured** for your ServiceNow instances
    ```bash
-   now-sdk auth add --alias dev --host https://dev12345.service-now.com
-   now-sdk auth add --alias prod --host https://prod12345.service-now.com
+   now-sdk auth --add https://dev12345.service-now.com --alias dev --type oauth
+   now-sdk auth --add https://prod12345.service-now.com --alias prod --type oauth
    ```
 
-3. **Node.js 22+** is available in the environment
+3. **Node.js 26+** is available in the environment
+
+For clients that cannot unlock the OS keyring, see [credential storage](../../CLAUDE.md#credential-storage) for importing credentials and enabling `SN_CRED_STORE_ENABLE=1`.
+
+## Table behavior and ATF planning
+
+With MCP 4.8.0+, use `discover_table_behavior` alongside schema discovery when building or debugging table processes. Both behavior tools are in `full`, `readonly`, `developer`, and `flow_developer`; select one through `MCP_TOOL_PACKAGE` if your current package omits them.
+
+Example arguments for `discover_table_behavior`:
+
+```json
+{
+  "instance": "dev",
+  "table": "change_request",
+  "categories": ["business_rules", "flows", "state_models"],
+  "details": ["scripts", "definitions", "dependencies"],
+  "dependency_depth": 1,
+  "max_bytes": 262144
+}
+```
+
+Omit categories for all eight, including UI actions, client scripts, UI/data policies and workflows. Use `get_behavior_details` for 1–50 known references, preserving `kind`, `sourceTable` and `sysId` exactly as returned.
+
+For Change Management ATFs, read required fields, state transitions, trigger conditions and dependent artifacts from `structuredContent`. Follow category cursors and inspect warnings, omitted details and remaining references. Keep browser requirements separate from server enforcement and preserve runtime/design provenance. Configuration does not establish that a condition will pass or a flow will run; verify execution separately.
+
+See [README examples and output controls](../../README.md#table-behavior-discovery), [tool parameters](../../TOOLS.md#discover_table_behavior), and the [behavior guide](../table-behavior.md).
 
 ## Customization
 
@@ -116,14 +141,10 @@ Append custom workflow guides specific to your project:
 
 ### Keeping Updated
 
-When the MCP server is upgraded with new tools, re-copy the guidance files from the latest package:
+When the server gains tools, review current guidance in this repository and merge it into your project's existing instructions. Guidance files are not included in the npm package. From an updated repository checkout, copy them when creating a new project:
 
 ```bash
-# After upgrading
-npm update -g @sonisoft/now-sdk-ext-mcp
-
-# Re-copy guidance files
-cp node_modules/@sonisoft/now-sdk-ext-mcp/docs/ai-agents/CLAUDE.md ./CLAUDE.md
+cp docs/ai-agents/CLAUDE.md /path/to/new-project/CLAUDE.md
 ```
 
 ## How It Works
