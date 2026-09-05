@@ -16,6 +16,8 @@
  * which is the point, and is asserted by a test rather than left to memory.
  */
 
+import { registerDiscoverTableBehaviorTool, registerGetBehaviorDetailsTool } from "./behavior.js";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import {
@@ -201,6 +203,8 @@ export const TOOL_REGISTRY: Record<string, ToolRegistrar> = {
   code_search: registerCodeSearchTool,
   list_code_search_groups: registerListCodeSearchGroupsTool,
   list_code_search_tables: registerListCodeSearchTablesTool,
+  discover_table_behavior: registerDiscoverTableBehaviorTool,
+  get_behavior_details: registerGetBehaviorDetailsTool,
   // ---- discovery
   list_instance_tables: registerListInstanceTablesTool,
   list_plugins: registerListPluginsTool,

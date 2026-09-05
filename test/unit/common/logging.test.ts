@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -129,6 +129,19 @@ maybe("MCP server logging", () => {
             expect(parsed.jsonrpc).toBe("2.0");
         }
     }, 60_000);
+
+    it("silences SDK refresh diagnostics before credential reads", () => {
+        const script = `
+import { initLogging } from ${JSON.stringify(path.join(REPO, "dist/common/logging.js"))};
+import { logger } from ${JSON.stringify(path.join(REPO, "node_modules/@servicenow/sdk-cli/dist/logger/index.js"))};
+initLogging();
+logger.info('Access Token has expired, refreshing token');
+logger.error('Simulated refresh failure');
+process.stdout.write(JSON.stringify({ok: true}));
+`;
+        const stdout = execFileSync(process.execPath, ["--input-type=module", "-e", script], { cwd: workdir, encoding: "utf8", timeout: 10000 });
+        expect(JSON.parse(stdout)).toEqual({ok: true});
+    });
 
     it("creates no logs/ directory in the directory it was launched from", async () => {
         await runServer(workdir, { XDG_STATE_HOME: stateHome });

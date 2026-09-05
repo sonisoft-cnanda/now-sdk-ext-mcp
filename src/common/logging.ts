@@ -17,6 +17,7 @@
  */
 
 import { Logger, configureLogging } from "@sonisoft/now-sdk-ext-core";
+import { logger as sdkLogger } from "@servicenow/sdk-cli/dist/logger/index.js";
 
 let configured = false;
 
@@ -32,6 +33,7 @@ export function initLogging(): void {
         return;
     }
     configured = true;
+    sdkLogger.setLevel("silent");
 
     configureLogging({
         // stderr IS this server's log channel — an operator reading `docker logs` or a
