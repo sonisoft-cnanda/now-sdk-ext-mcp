@@ -7,6 +7,7 @@ jest.unstable_mockModule('@servicenow/sdk-cli/dist/auth/index.js', () => ({
 
 // Mock the core library
 jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
+  resolveSessionCredentials: async (alias: string) => (await import('@servicenow/sdk-cli/dist/auth/index.js')).getCredentials(alias),
   ServiceNowInstance: jest.fn().mockImplementation((settings: any) => ({
     getHost: () => settings?.credential?.instanceUrl ?? 'https://test.service-now.com',
     getUserName: () => settings?.credential?.username ?? 'test-user',
@@ -27,7 +28,8 @@ jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
 
 // Dynamic imports after mocks are set up (required for ESM)
 const { getCredentials } = await import('@servicenow/sdk-cli/dist/auth/index.js')
-const { getServiceNowInstance } = await import('../../../src/common/connection.js')
+const { ServiceNowInstance } = await import('@sonisoft/now-sdk-ext-core')
+const { getServiceNowInstance, withConnectionRetry } = await import('../../../src/common/connection.js')
 
 const mockGetCredentials = getCredentials as jest.MockedFunction<typeof getCredentials>
 
@@ -121,5 +123,66 @@ describe('getServiceNowInstance', () => {
     expect(mockGetCredentials).toHaveBeenCalledTimes(2)
     expect(mockGetCredentials).toHaveBeenCalledWith('instance-a')
     expect(mockGetCredentials).toHaveBeenCalledWith('instance-b')
+  })
+
+  it.each(['explicit', 'environment'])('binds the credential provider to the resolved %s alias', async (selection) => {
+    const alias = `provider-${selection}`
+    process.env.SN_AUTH_ALIAS = alias
+    const initial = {
+      type: 'basic' as const,
+      username: 'fixture-user',
+      password: 'fabricated-initial',
+      instanceUrl: 'https://fixture.invalid',
+    }
+    const renewed = { ...initial, password: 'fabricated-renewed' }
+    mockGetCredentials.mockResolvedValueOnce(initial).mockResolvedValueOnce(renewed)
+
+    await getServiceNowInstance(selection === 'explicit' ? alias : undefined)
+    process.env.SN_AUTH_ALIAS = 'changed-after-resolution'
+    const settings = jest.mocked(ServiceNowInstance).mock.calls[0]![0]
+
+    expect(settings.credential).toEqual(initial)
+    expect(typeof settings.credentialProvider).toBe('function')
+    await expect(settings.credentialProvider!()).resolves.toEqual(renewed)
+    expect(mockGetCredentials.mock.calls).toEqual([[alias], [alias]])
+  })
+
+  it.each(['NEX_AUTH_REAUTH_REQUIRED', 'NEX_AUTH_TEMPORARY', 'NEX_SESSION_EXPIRED'])('does not replay an operation or evict its session for %s', async (code) => {
+    const alias = `no-replay-${code}`
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic',
+      username: 'fixture-user',
+      password: 'fabricated',
+      instanceUrl: 'https://fixture.invalid',
+    })
+    const cached = await getServiceNowInstance(alias)
+    const error = Object.assign(new Error('fetch failed: ECONNRESET'), { code })
+    const operation = jest.fn<() => Promise<void>>().mockRejectedValue(error)
+
+    await expect(withConnectionRetry(alias, operation)).rejects.toBe(error)
+
+    expect(operation).toHaveBeenCalledTimes(1)
+    expect(operation).toHaveBeenCalledWith(cached)
+    expect(await getServiceNowInstance(alias)).toBe(cached)
+    expect(mockGetCredentials).toHaveBeenCalledTimes(1)
+  })
+
+  it('still retries a transport failure once with a fresh instance', async () => {
+    const alias = 'retry-transport'
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic',
+      username: 'fixture-user',
+      password: 'fabricated',
+      instanceUrl: 'https://fixture.invalid',
+    })
+    const error = Object.assign(new Error('ECONNRESET'), { code: 'ECONNRESET' })
+    const operation = jest.fn<(instance: InstanceType<typeof ServiceNowInstance>) => Promise<string>>()
+      .mockRejectedValueOnce(error).mockResolvedValueOnce('recovered')
+
+    await expect(withConnectionRetry(alias, operation)).resolves.toBe('recovered')
+
+    expect(operation).toHaveBeenCalledTimes(2)
+    expect(mockGetCredentials.mock.calls).toEqual([[alias], [alias]])
+    expect(operation.mock.calls[0]![0]).not.toBe(operation.mock.calls[1]![0])
   })
 })
