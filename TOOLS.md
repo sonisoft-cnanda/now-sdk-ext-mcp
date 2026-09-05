@@ -51,7 +51,7 @@ session.
 |---|---|
 | `full` | Everything. The default when the variable is unset. |
 | `readonly` | Only tools that cannot modify anything. Derived from the `readOnlyHint` annotations, so it cannot drift. |
-| `developer` | Scripts, schema, source sync, update sets, scope, logs, code search. |
+| `developer` | Scripts, schema, table behavior, source sync, update sets, scope, logs, code search. |
 | `service_desk` | Tickets, knowledge, catalog requests. No scripting or schema. |
 | `admin` | Users and groups, plugins, health, app lifecycle, scripting. |
 | `change_manager` | Change approvals, update sets, flows and workflows, app repo. |
@@ -955,6 +955,98 @@ state:
 caller_id -> sys_user (reference)
 assignment_group -> sys_user_group (reference)
 ```
+
+---
+
+## discover_table_behavior
+
+Read configuration affecting a table: business rules, UI actions, client scripts, UI policies and field actions, server data policies, legacy workflows, record-triggered flows and generic state models. Complements `discover_table_schema` with conditions, timing, applicability, provenance and optional artifact details. Available in `full`, `readonly`, `developer`, and `flow_developer`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `instance` | string | No | `SN_AUTH_ALIAS` | Instance credential alias |
+| `table` | string | **Yes** | — | Target table, e.g. `change_request` |
+| `categories` | string[] | No | All eight | Nonempty selection of `business_rules`, `ui_actions`, `client_scripts`, `ui_policies`, `data_policies`, `workflows`, `flows`, `state_models` |
+| `include_inherited` | boolean | No | `true` | Include applicable ancestor behavior |
+| `include_inactive` | boolean | No | `false` | Include inactive/draft candidates where discoverable |
+| `name` | string | No | — | Metadata name contains this text; maximum 128 characters, no caret or newline |
+| `sys_ids` | string[] | No | — | Up to 50 metadata source IDs, each 32 hexadecimal characters; for known flow IDs use `get_behavior_details` |
+| `limit` | integer | No | `50` | Items per category, 1–200 |
+| `cursors` | object | No | — | Category-to-`nextCursor` map; retain the original table, filters and detail selection |
+| `details` | string[] | No | Compact summaries | Include any of `scripts`, `definitions`, `dependencies` in this call |
+| `dependency_depth` | integer | No | `0` | 0 or 1; 1 requires `dependencies` and expands at most 50 unique references |
+| `max_bytes` | integer | No | `65536` | JSON response budget, 4,096–1,048,576 bytes |
+| `scope` | string | No | — | Transaction scope for flow definition reads |
+
+### Example Usage
+
+```json
+{
+  "name": "discover_table_behavior",
+  "arguments": {
+    "instance": "dev",
+    "table": "change_request",
+    "categories": ["business_rules", "flows", "state_models"],
+    "details": ["scripts", "definitions", "dependencies"],
+    "dependency_depth": 1,
+    "max_bytes": 262144
+  }
+}
+```
+
+### Output and Continuation
+
+`structuredContent` contains `table`, `ancestors`, `requestedDetails`, `categories`, `dependencies`, `warnings`, and `visibility: "accessible_configuration"`. Each category has `status` (`complete`, `partial`, `unavailable`, or `failed`), `items`, `warnings`, and optional `nextCursor`. Items retain source references, configuration, available script-field names, requested details and omissions. The text content summarizes counts and incomplete reads.
+
+Pass returned cursors in `cursors` with unchanged filters, even after an empty designer-scan page. Oversized detail is omitted whole with warnings and recovery references; use a larger budget or targeted retrieval. Missing permissions, plugins or fields affect completeness. Conditions are not evaluated. Runtime trigger metadata and current design definitions are labeled separately and can differ. See [behavior guidance](README.md#table-behavior-discovery) for ATF usage and [core details](https://github.com/sonisoft-cnanda/now-sdk-ext-core/blob/main/docs/TableBehaviorDiscovery.md) for source layouts and limits.
+
+---
+
+## get_behavior_details
+
+Read 1–50 known behavior references without repeating table discovery. Accept references directly from `discover_table_behavior`, or known IDs with an allowed kind/source-table pair. Read-only; available in `full`, `readonly`, `developer`, and `flow_developer`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `instance` | string | No | `SN_AUTH_ALIAS` | Instance credential alias |
+| `references` | object[] | **Yes** | — | 1–50 objects with `kind`, `sourceTable`, and `sysId`; reference keys use camelCase |
+| `details` | string[] | No | Compact summaries | Any of `scripts`, `definitions`, `dependencies` |
+| `dependency_depth` | integer | No | `0` | 0 or 1; 1 requires `dependencies` and expands at most 50 unique references |
+| `max_bytes` | integer | No | `65536` | JSON response budget, 4,096–1,048,576 bytes |
+| `scope` | string | No | — | Transaction scope for flow definition reads |
+
+`kind` accepts the eight discovery categories plus `subflow`, `action`, `script_include`, and `decision_table`. `sysId` must be 32 hexadecimal characters. Core validates kind/source-table pairs; known flows use `flows` with `sys_hub_flow`. Discovery flow references may instead identify trigger records, so preserve returned references unchanged.
+
+### Example Usage
+
+Replace the example sys_id with a flow ID from your instance:
+
+```json
+{
+  "name": "get_behavior_details",
+  "arguments": {
+    "instance": "dev",
+    "references": [
+      {
+        "kind": "flows",
+        "sourceTable": "sys_hub_flow",
+        "sysId": "0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "details": ["definitions", "dependencies"],
+    "dependency_depth": 1,
+    "max_bytes": 262144
+  }
+}
+```
+
+### Output and Recovery
+
+`structuredContent` contains `items`, `dependencies`, `warnings`, `remainingReferences`, `requestedDetails`, and `visibility: "accessible_configuration"`. Items preserve canonical references, configuration and optional details. Inaccessible or oversized details include warnings and recovery information. Retry `remainingReferences` or item references with a larger budget or smaller batch; inspect `omittedDetails` before using a result as complete. Scripts are never truncated mid-body. Dynamic dependencies may remain unresolved; explicit and inferred references retain evidence and snapshot provenance when available.
 
 ---
 

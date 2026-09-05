@@ -2,21 +2,42 @@
 
 An MCP (Model Context Protocol) server that enables AI assistants to interact directly with ServiceNow instances — executing background scripts, querying data, running ATF tests, tailing logs, and more.
 
-Built on [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) and [`@sonisoft/now-sdk-ext-core`](https://git.sonisoft.io).
+Built on [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) and [`@sonisoft/now-sdk-ext-core`](https://github.com/sonisoft-cnanda/now-sdk-ext-core).
 
-Use [table behavior discovery](docs/table-behavior.md) to inspect automation, field requirements, and related artifact details.
+Use [table behavior discovery](#table-behavior-discovery) to inspect automation, field requirements, and related artifact details. Available in MCP **4.8.0**, using core **6.4.1**.
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Node.js** >= 22
+- **Node.js** >= 26
 - **ServiceNow CLI credentials** configured via `now-sdk auth --add`
 
-### Install and Build
+### Use the Published Package
+
+Configure your MCP client to launch `npx --yes @sonisoft/now-sdk-ext-mcp`:
+
+```json
+{
+  "mcpServers": {
+    "servicenow": {
+      "command": "npx",
+      "args": ["--yes", "@sonisoft/now-sdk-ext-mcp"],
+      "env": {
+        "SN_AUTH_ALIAS": "dev",
+        "MCP_TOOL_PACKAGE": "readonly"
+      }
+    }
+  }
+}
+```
+
+The `readonly` package includes schema and behavior discovery. Omit `MCP_TOOL_PACKAGE` for all tools, or select a [tool package](TOOLS.md#tool-packages) for your workflow.
+
+### Build from Source
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/sonisoft-cnanda/now-sdk-ext-mcp.git
 cd now-sdk-ext-mcp
 npm install
 npm run build
@@ -27,10 +48,11 @@ npm run build
 This server uses the same credential store as the ServiceNow CLI. If you haven't already, configure your instance credentials:
 
 ```bash
-now-sdk auth --add <instance_alias>
+npm install -g @servicenow/sdk
+now-sdk auth --add https://dev12345.service-now.com --alias dev --type oauth
 ```
 
-This stores credentials locally so the MCP server can authenticate without prompting.
+This stores credentials locally. For clients that cannot unlock the OS keyring, import credentials into `@sonisoft/sn-credstore` and set `SN_CRED_STORE_ENABLE=1` in the server environment; see [credential storage](CLAUDE.md#credential-storage).
 
 > **Breaking Change in v2.0.0 (ServiceNow SDK 4.3.0)**
 >
@@ -45,7 +67,7 @@ This stores credentials locally so the MCP server can authenticate without promp
 > npm install -g @servicenow/sdk@4.3.0
 >
 > # 2. Re-add each instance alias
-> now-sdk auth --add <your-alias>
+> now-sdk auth --add https://dev12345.service-now.com --alias dev --type oauth
 >
 > # 3. Verify your aliases work
 > now-sdk auth --list
@@ -112,7 +134,7 @@ Add to your `.vscode/mcp.json` or Cursor MCP settings:
 
 ### Claude Code
 
-Add to your `.claude/settings.json` or project-level `.mcp.json`:
+Add to your project-level `.mcp.json`:
 
 ```json
 {
@@ -157,12 +179,92 @@ Once connected, you can talk to your AI assistant naturally:
 
 > "Query the sys_user table for users with the admin role on prod"
 
-The AI will:
-1. Write the appropriate ServiceNow server-side JavaScript
-2. Call the `execute_script` tool with the instance alias and script
-3. Return the results in a readable format
+> "Inspect change_request behavior on dev. Identify transition requirements and flow conditions needed for Change Management ATF coverage."
+
+The assistant selects the appropriate tools, supplies the instance alias, and interprets their results. Schema tools describe fields; behavior tools retrieve automation configuration and dependencies. Script execution is available when the task calls for server-side JavaScript.
 
 The `instance` parameter can be passed explicitly per-request or defaulted via the `SN_AUTH_ALIAS` environment variable, so if you only work with one instance you can set-and-forget.
+
+## Table Behavior Discovery
+
+Use `discover_table_behavior` to inventory configuration affecting a table and `get_behavior_details` to retrieve known artifacts without rescanning. Both tools are read-only and available in the `full`, `readonly`, `developer`, and `flow_developer` packages.
+
+| Category | Functional context |
+| --- | --- |
+| `business_rules` | Before/after/async timing, operation flags, order, conditions and scripts |
+| `ui_actions` | Form/list/workspace placement, roles, conditions and scripts |
+| `client_scripts` | Client events, target fields, views and inherited applicability |
+| `ui_policies` | Conditions and mandatory, visible or read-only field actions |
+| `data_policies` | Server field requirements and enforcement settings |
+| `workflows` | Legacy workflow versions, start conditions, activities and transitions |
+| `flows` | Record triggers, conditions and optional current flow definitions |
+| `state_models` | State fields, transition gates and required fields in supported generic layouts |
+
+Pass these **tool arguments** to `discover_table_behavior` for a compact inventory:
+
+```json
+{
+  "instance": "dev",
+  "table": "change_request"
+}
+```
+
+Defaults: active configuration, applicable ancestors, all eight categories, 50 items per category and a 65,536-byte JSON budget. Summaries include conditions and declarative field actions. Request scripts, definitions and dependencies in the first call when needed:
+
+```json
+{
+  "instance": "dev",
+  "table": "change_request",
+  "categories": ["business_rules", "flows", "state_models"],
+  "details": ["scripts", "definitions", "dependencies"],
+  "dependency_depth": 1,
+  "max_bytes": 262144
+}
+```
+
+For known artifacts, pass 1–50 `references` to `get_behavior_details`. Replace example IDs with real source IDs. Reference objects preserve the core API's camelCase keys even though tool options use snake_case:
+
+```json
+{
+  "instance": "dev",
+  "references": [
+    {
+      "kind": "flows",
+      "sourceTable": "sys_hub_flow",
+      "sysId": "0123456789abcdef0123456789abcdef"
+    }
+  ],
+  "details": ["definitions", "dependencies"],
+  "dependency_depth": 1,
+  "max_bytes": 262144
+}
+```
+
+References from discovery can be passed through unchanged. Flow discovery can return trigger references; a known flow ID uses `kind: "flows"` and `sourceTable: "sys_hub_flow"`. Detail retrieval also supports subflows, actions, Script Includes and decision tables.
+
+**Controls and continuation:**
+
+- Filter discovery with `categories`, metadata `name`, or up to 50 `sys_ids`. Use `include_inherited: false` for direct table associations and `include_inactive: true` for inactive/draft candidates where available.
+- `limit` accepts 1–200 items per category. `max_bytes` accepts 4,096–1,048,576 bytes on either tool.
+- `dependency_depth` defaults to 0; 1 requires `details` containing `dependencies` and expands at most 50 unique dependency references. `scope` selects the transaction scope for flow definition reads.
+- Pass each category's `nextCursor` in `cursors`, retaining the original table, filters and detail selection. For example, after a `business_rules`-only inventory:
+
+```json
+{
+  "instance": "dev",
+  "table": "change_request",
+  "categories": ["business_rules"],
+  "cursors": {
+    "business_rules": "<nextCursor from the previous response>"
+  }
+}
+```
+
+Both tools return the core result in `structuredContent` and a short text summary. Discovery includes category `status` (`complete`, `partial`, `unavailable`, or `failed`), `items`, `warnings` and optional `nextCursor`. Detail batches include `remainingReferences`. Oversized details are omitted whole with `omittedDetails` and warnings; increase the budget or narrow the batch. Empty pages can still need continuation, and empty results only describe the account's accessible configuration.
+
+**Change Management ATF workflow:** combine schema fields and choices with behavior conditions, required fields, state transitions, approval steps and dependent artifacts. Keep UI behavior separate from server enforcement. Preserve source references and runtime/design provenance: current flow definitions can differ from the version associated with runtime trigger metadata. Conditions are not evaluated and execution order is not predicted. Validate the resulting test assumptions with ATF results, logs and flow contexts.
+
+Live behavior validation used an Australia instance; Zurich validation remains outstanding. See the [behavior guide](docs/table-behavior.md), [tool parameters](TOOLS.md#discover_table_behavior), and [core API reference](https://github.com/sonisoft-cnanda/now-sdk-ext-core/blob/main/docs/TableBehaviorDiscovery.md).
 
 ## Available Tools
 
@@ -173,6 +275,9 @@ See **[TOOLS.md](TOOLS.md)** for the full list of available tools with parameter
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SN_AUTH_ALIAS` | _(none)_ | Default ServiceNow auth alias. Used when a tool call doesn't specify an `instance` parameter. |
+| `MCP_TOOL_PACKAGE` | `full` | Tool package or comma-separated union; see [tool packages](TOOLS.md#tool-packages). |
+| `SN_CRED_STORE_ENABLE` | _(unset)_ | Set to `1` to use the imported headless credential store; see [credential storage](CLAUDE.md#credential-storage). |
+| `NEX_LOG_LEVEL` | `info` | Diagnostic log level; logs go to stderr. See [debugging](#debugging) for file logging. |
 
 ## Development
 
@@ -181,8 +286,10 @@ See **[TOOLS.md](TOOLS.md)** for the full list of available tools with parameter
 ```
 src/
 ├── index.ts                 # Server entry point — registers tools, starts stdio transport
-├── tools/                   # MCP tool implementations (one file per tool)
-│   └── execute-script.ts    # execute_script tool
+├── tools/                   # Tool implementations and registry.ts
+│   └── behavior.ts          # Discovery and batched behavior detail tools
+├── config/tool-packages.ts  # Role package definitions
+├── resources/              # Read-only servicenow:// resources
 └── common/
     └── connection.ts        # ServiceNow connection manager (credential resolution + caching)
 
@@ -209,52 +316,16 @@ test/
 
 ### Adding a New Tool
 
-1. Create a new file in `src/resources/       # servicenow:// read-only resources
-src/tools/` (e.g., `src/tools/query-table.ts`).
-2. Export a registration function:
-
-   ```typescript
-   import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-   import { z } from "zod";
-   import { getServiceNowInstance } from "../common/connection.js";
-
-   export function registerQueryTableTool(server: McpServer): void {
-     server.registerTool(
-       "query_table",
-       {
-         title: "Query Table",
-         description: "Query records from a ServiceNow table.",
-         inputSchema: {
-           instance: z.string().optional().describe("ServiceNow instance auth alias"),
-           table: z.string().describe("Table name to query"),
-           // ... more params
-         },
-       },
-       async ({ instance, table }) => {
-         const snInstance = await getServiceNowInstance(instance);
-         // ... use core library to query
-         return {
-           content: [{ type: "text" as const, text: "results here" }],
-         };
-       }
-     );
-   }
-   ```
-
-3. Register it in `src/index.ts`:
-
-   ```typescript
-   import { registerQueryTableTool } from "./tools/query-table.js";
-
-   registerQueryTableTool(server);
-   ```
-
-4. Add tests in `test/unit/tools/` following the existing pattern.
-5. Document the tool in [`TOOLS.md`](TOOLS.md).
+1. Add a registration function under `src/tools/`; [behavior.ts](src/tools/behavior.ts) demonstrates input validation, structured output and error handling.
+2. Route ServiceNow calls through `withConnectionRetry` and delegate reusable behavior to core.
+3. Add the tool to `TOOL_REGISTRY` in [registry.ts](src/tools/registry.ts) and classify its effects in [annotations.ts](src/common/annotations.ts). Registration rejects unclassified tools.
+4. Add it to relevant role packages in [tool-packages.ts](src/config/tool-packages.ts). The full package uses the registry; the readonly package uses annotations.
+5. Test listing and invocation through the MCP client in `test/unit/tools/`, and cover package membership where relevant.
+6. Document parameters and examples in [TOOLS.md](TOOLS.md) and update user-facing README guidance.
 
 ### Testing Approach
 
-Tests use the MCP SDK's `InMemoryTransport` to create linked client+server pairs entirely in-process. This means tests go through the full MCP protocol stack (JSON-RPC serialization, schema validation, handler dispatch) without spawning processes or touching the network.
+Tool tests use the MCP SDK's `InMemoryTransport` for linked client/server pairs and exercise JSON-RPC, schema validation and handler dispatch without ServiceNow calls. Logging tests also spawn the real server to verify stdout purity, stderr redaction and shutdown flushing.
 
 - **Unit tests** (`test/unit/`): Mock external dependencies (`@sonisoft/now-sdk-ext-core`, `@servicenow/sdk-cli`) using `jest.unstable_mockModule()` for ESM compatibility. Test tool behavior through the MCP client.
 - **Integration tests** (`test/integration/`): Verify the MCP protocol lifecycle (handshake, tool listing, sequential calls) without mocking.
@@ -263,8 +334,8 @@ Tests use the MCP SDK's `InMemoryTransport` to create linked client+server pairs
 
 This MCP server wraps the same core library used by the CLI:
 
-- **Core library**: [`@sonisoft/now-sdk-ext-core`](../now-sdk-ext-core) — all ServiceNow communication (auth, HTTP, WebSocket, script execution, ATF, syslog)
-- **CLI**: [`@sonisoft/now-sdk-ext-cli`](../now-sdk-ext-cli) — the `nex` CLI that wraps the core library with oclif
+- **Core library**: [`@sonisoft/now-sdk-ext-core`](https://github.com/sonisoft-cnanda/now-sdk-ext-core) — all ServiceNow communication (auth, HTTP, WebSocket, script execution, ATF, syslog)
+- **CLI**: [`@sonisoft/now-sdk-ext-cli`](https://github.com/sonisoft-cnanda/now-sdk-ext-cli) — the `nex` CLI that wraps the core library with oclif
 
 When adding new MCP tools, reference the corresponding CLI command in `now-sdk-ext-cli/src/commands/` for the expected behavior and data flow.
 
@@ -305,7 +376,7 @@ There are three layers of testing for this project:
 
 #### 1. Automated Tests (Jest)
 
-Unit and integration tests run entirely in-process using the MCP SDK's `InMemoryTransport` — no server process, no network, no credentials needed.
+Protocol tests use `InMemoryTransport`; logging checks also launch the real server. Automated tests do not require ServiceNow credentials or call a live instance.
 
 ```bash
 npm test                 # Unit tests (default, fast)
@@ -427,7 +498,7 @@ printf '%s\n%s\n%s\n' \
 
 Since stdout is reserved for JSON-RPC, **never use `console.log()` in server code** — it corrupts the protocol stream. Use these approaches instead:
 
-- **`console.error()`** — writes to stderr, which is safe and visible in the MCP Inspector's Notifications pane and in Claude Desktop's log files (`~/Library/Logs/Claude/mcp*.log`).
+- **Shared logger** — use `getLogger()` from `src/common/logging.ts`. It sends diagnostics to stderr and redacts structured metadata and recognized credential patterns. Avoid raw `console.error()` with errors or session data.
 - **MCP Inspector** — run the server under the inspector to see all JSON-RPC messages and stderr output in real time.
 - **File logging** — off by default. This server's working directory is chosen by whoever launched it, so it writes no files unless asked. Configure with environment variables:
 
@@ -439,7 +510,7 @@ Since stdout is reserved for JSON-RPC, **never use `console.log()` in server cod
   | `NEX_POLICY_DENY` | `write`, `execute`, or `all` — refuses matching instance changes. Malformed values **fail closed** |
   | `NEX_POLICY_ALLOW` | Grants verbs. Inert while changes are permitted by default |
 
-  Diagnostics always go to **stderr**, never stdout — stdout carries JSON-RPC. Credential material is stripped from both metadata and message text before anything is written.
+  Diagnostics always go to **stderr**, never stdout — stdout carries JSON-RPC. SDK diagnostics use the same redacting logger. Redaction covers structured credential fields and recognized message patterns; never interpolate arbitrary secrets into log messages. SIGINT and SIGTERM wait for log flushing within a two-second shutdown bound. Core 6.4.1 also waits for the underlying file stream to finish pending writes.
 
 ### Code Conventions
 
