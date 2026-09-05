@@ -13,11 +13,14 @@ const controls = {
 };
 
 function output(result: TableBehaviorResult | BehaviorDetailsResult) {
-  const count = "categories" in result ? result.categories.reduce((sum, section) => sum + section.items.length, 0) : result.items.length;
+  const items = "categories" in result ? result.categories.flatMap(section => section.items) : result.items;
+  const count = items.length;
   const partial = "categories" in result ? result.categories.filter(section => section.status !== "complete").map(section => section.category) : [];
+  const remaining = "remainingReferences" in result ? result.remainingReferences.length : 0;
+  const hasWarnings = result.warnings.length || [...items, ...result.dependencies].some(item => item.warnings.length);
   return {
     structuredContent: { ...result },
-    content: [{ type: "text" as const, text: `${count} configured behavior item(s). Details and source references are in structuredContent. Conditions were not evaluated.${partial.length ? ` Incomplete categories: ${partial.join(", ")}; inspect warnings and nextCursor.` : ""}${result.warnings.length ? " Inspect top-level warnings for omissions or failed reads." : ""}` }],
+    content: [{ type: "text" as const, text: `${count} configured behavior item(s). Details and source references are in structuredContent. Conditions were not evaluated.${partial.length ? ` Incomplete categories: ${partial.join(", ")}; inspect warnings and nextCursor.` : ""}${remaining ? ` Incomplete batch: ${remaining} reference(s) remain. Retry remainingReferences with a larger max_bytes or smaller batch.` : ""}${hasWarnings ? " Inspect warnings for omissions or failed reads." : ""}` }],
   };
 }
 

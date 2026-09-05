@@ -139,6 +139,7 @@ initLogging();
 logger.info('Access Token has expired, refreshing token');
 logger.error('Simulated refresh failure', {password: 'fixture-sdk-password'}, new Error('Bearer fixture-sdk-bearer'));
 logger.error(new Error('SDK standalone failure; Bearer fixture-sdk-bare'));
+logger.error('SDK string failure; Bearer fixture-sdk-string');
 await flushLogs();
 process.stdout.write(JSON.stringify({ok: true}));
 `;
@@ -153,6 +154,8 @@ process.stdout.write(JSON.stringify({ok: true}));
         expect(result.stderr).toContain('"name":"Error"');
         expect(result.stderr).toContain('"stack":');
         expect(result.stderr).not.toContain('fixture-sdk-bare');
+        expect(result.stderr).toContain('SDK string failure');
+        expect(result.stderr).not.toContain('fixture-sdk-string');
         expect(result.stderr.includes('Access Token has expired')).toBe(level === 'info');
     });
 

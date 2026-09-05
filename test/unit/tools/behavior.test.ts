@@ -74,4 +74,18 @@ describe('behavior tools through MCP', () => {
     expect(JSON.stringify(result.content)).toContain('Incomplete categories: flows');
     expect(JSON.stringify(result.structuredContent)).toContain('nextCursor');
   });
+  it('calls out a remaining batch even when no top-level warning is returned', async () => {
+    const references: BehaviorReference[] = [{ kind: 'business_rules', sourceTable: 'sys_script', sysId: 'a'.repeat(32) }];
+    details.mockResolvedValue({ items: [], dependencies: [], remainingReferences: references, requestedDetails: [], warnings: [], visibility: 'accessible_configuration' });
+    const result = await client.callTool({ name: 'get_behavior_details', arguments: { references } });
+    expect(JSON.stringify(result.content)).toContain('Incomplete batch: 1');
+    expect(JSON.stringify(result.content)).toContain('Retry remainingReferences');
+    expect(result.structuredContent).toMatchObject({ remainingReferences: references });
+  });
+  it('surfaces item-level omissions in the text summary', async () => {
+    const reference: BehaviorReference = { kind: 'business_rules', sourceTable: 'sys_script', sysId: 'a'.repeat(32) };
+    details.mockResolvedValue({ items: [{ reference, name: 'Rule', configuration: {}, scriptFields: ['script'], warnings: [{ code: 'missing_fields', message: 'Script unavailable' }] }], dependencies: [], remainingReferences: [], requestedDetails: ['scripts'], warnings: [], visibility: 'accessible_configuration' });
+    const result = await client.callTool({ name: 'get_behavior_details', arguments: { references: [reference], details: ['scripts'] } });
+    expect(JSON.stringify(result.content)).toContain('Inspect warnings for omissions');
+  });
 });
