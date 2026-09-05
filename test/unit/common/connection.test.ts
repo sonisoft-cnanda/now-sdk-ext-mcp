@@ -7,6 +7,7 @@ jest.unstable_mockModule('@servicenow/sdk-cli/dist/auth/index.js', () => ({
 
 // Mock the core library
 jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
+  resolveSessionCredentials: async (alias: string) => (await import('@servicenow/sdk-cli/dist/auth/index.js')).getCredentials(alias),
   ServiceNowInstance: jest.fn().mockImplementation((settings: any) => ({
     getHost: () => settings?.credential?.instanceUrl ?? 'https://test.service-now.com',
     getUserName: () => settings?.credential?.username ?? 'test-user',

@@ -1,4 +1,4 @@
-import { getCredentials } from "@servicenow/sdk-cli/dist/auth/index.js";
+import { resolveSessionCredentials } from "@sonisoft/now-sdk-ext-core";
 import {
   ServiceNowInstance,
   ServiceNowSettingsInstance,
@@ -61,7 +61,7 @@ export async function getServiceNowInstance(
     instanceCache.delete(resolvedAlias);
   }
 
-  const credential = await getCredentials(resolvedAlias);
+  const credential = await resolveSessionCredentials(resolvedAlias);
   if (!credential) {
     // The previous text told users to run "snc configure", which is not a
     // command this SDK has ever shipped — so the one actionable line in the
@@ -87,6 +87,7 @@ export async function getServiceNowInstance(
   const snSettings: ServiceNowSettingsInstance = {
     alias: resolvedAlias,
     credential,
+    credentialProvider: () => resolveSessionCredentials(resolvedAlias),
   };
 
   const instance = new ServiceNowInstance(snSettings);
@@ -131,6 +132,8 @@ const RETRYABLE_PATTERNS =
  */
 function isRetryableError(error: unknown): boolean {
   if (!error) return false;
+  if (typeof error === "object" && "code" in error &&
+      typeof error.code === "string" && /^(NEX_AUTH_|NEX_SESSION_)/.test(error.code)) return false;
   const msg = error instanceof Error ? error.message : String(error);
   return RETRYABLE_PATTERNS.test(msg);
 }

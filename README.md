@@ -453,3 +453,14 @@ Since stdout is reserved for JSON-RPC, **never use `console.log()` in server cod
 ## License
 
 MIT
+
+## OAuth renewal
+
+Alias-bound connections provide core with a credential resolver. Core can refresh
+OAuth and rebuild session cookies during long-running operations; the 30-minute
+connection cache is not an authentication lifetime.
+
+Core owns authentication retries. MCP does not retry `NEX_AUTH_*` or
+`NEX_SESSION_*` errors again. Writes and stateful sessions require an explicit safe
+restart after expiry. Rejected refresh credentials require a new login; temporary
+store/network failures do not establish that interactive reauthentication is needed.
