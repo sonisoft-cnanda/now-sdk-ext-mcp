@@ -138,6 +138,7 @@ import { flushLogs } from ${JSON.stringify(path.join(REPO, "node_modules/@soniso
 initLogging();
 logger.info('Access Token has expired, refreshing token');
 logger.error('Simulated refresh failure', {password: 'fixture-sdk-password'}, new Error('Bearer fixture-sdk-bearer'));
+logger.error(new Error('SDK standalone failure; Bearer fixture-sdk-bare'));
 await flushLogs();
 process.stdout.write(JSON.stringify({ok: true}));
 `;
@@ -148,6 +149,10 @@ process.stdout.write(JSON.stringify({ok: true}));
         expect(result.stderr).toContain('[redacted]');
         expect(result.stderr).not.toContain('fixture-sdk-password');
         expect(result.stderr).not.toContain('fixture-sdk-bearer');
+        expect(result.stderr).toContain('SDK standalone failure');
+        expect(result.stderr).toContain('"name":"Error"');
+        expect(result.stderr).toContain('"stack":');
+        expect(result.stderr).not.toContain('fixture-sdk-bare');
         expect(result.stderr.includes('Access Token has expired')).toBe(level === 'info');
     });
 

@@ -44,6 +44,7 @@ export function initLogging(): void {
         // resolves those; naming them here would override an operator's NEX_LOG_FILE=0.
     });
     const sdkLog = getLogger("ServiceNow SDK");
+    sdkLogger.setLevel("silent");
     for (const level of ["info", "warn", "error", "debug"] as const) {
         sdkLogger[level] = (...args: unknown[]): void => {
             const message = args.map(arg => {

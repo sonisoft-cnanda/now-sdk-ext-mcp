@@ -61,6 +61,13 @@ describe('behavior tools through MCP', () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toBeUndefined();
   });
+  it('keeps unexpected non-Error throws out of tool output', async () => {
+    discover.mockRejectedValue('fixture-behavior-password');
+    const result = await client.callTool({ name: 'discover_table_behavior', arguments: { table: 'incident' } });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain('Unknown error');
+    expect(JSON.stringify(result.content)).not.toContain('fixture-behavior-password');
+  });
   it('calls out partial categories and retains continuation metadata', async () => {
     discover.mockResolvedValue({ ...empty, categories: [{ category: 'flows', status: 'partial', items: [], warnings: [{ code: 'truncated', message: 'Continue' }], nextCursor: 'cursor' }] });
     const result = await client.callTool({ name: 'discover_table_behavior', arguments: { table: 'incident' } });

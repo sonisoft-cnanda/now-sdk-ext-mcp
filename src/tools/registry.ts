@@ -16,8 +16,6 @@
  * which is the point, and is asserted by a test rather than left to memory.
  */
 
-import { registerDiscoverTableBehaviorTool, registerGetBehaviorDetailsTool } from "./behavior.js";
-
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import {
@@ -48,6 +46,7 @@ import {
   registerBatchCreateRecordsTool,
   registerBatchUpdateRecordsTool,
 } from "../tools/batch.js";
+import { registerDiscoverTableBehaviorTool, registerGetBehaviorDetailsTool } from "../tools/behavior.js";
 import {
   registerGetCatalogCategoryTool,
   registerGetCatalogItemTool,
