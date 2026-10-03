@@ -325,7 +325,7 @@ describe('execute_script tool', () => {
 
       expect(result.isError).toBe(true)
       const text = (result.content as any[])[0].text
-      expect(text).toBe(`Script not run: scope "x_acme_util" could not be used. ${message}`)
+      expect(text).toBe(`Script not run. ${message}`)
       expect(text).not.toContain('Error executing script')
     })
 

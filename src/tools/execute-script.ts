@@ -148,7 +148,7 @@ export function registerExecuteScriptTool(server: McpServer): void {
             {
               type: "text" as const,
               text: isScopeError
-                ? `Script not run: scope "${scope}" could not be used. ${message}`
+                ? `Script not run. ${message}`
                 : `Error executing script: ${message}`,
             },
           ],

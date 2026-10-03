@@ -167,6 +167,29 @@ describe('getServiceNowInstance', () => {
     expect(mockGetCredentials).toHaveBeenCalledTimes(1)
   })
 
+  it('rethrows a scope error unchanged, without replaying the operation', async () => {
+    // execute_script recognises core's ScriptScopeError by `code`, so the wrapper
+    // must hand back the very same object rather than a rebuilt one.
+    const alias = 'scope-error'
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic',
+      username: 'fixture-user',
+      password: 'fabricated',
+      instanceUrl: 'https://fixture.invalid',
+    })
+    const cached = await getServiceNowInstance(alias)
+    const error = Object.assign(new Error("No application with scope 'x_typo' exists on this instance."), {
+      code: 'NEX_SCRIPT_SCOPE_UNAVAILABLE',
+      reason: 'SCOPE_NOT_FOUND',
+    })
+    const operation = jest.fn<() => Promise<void>>().mockRejectedValue(error)
+
+    await expect(withConnectionRetry(alias, operation)).rejects.toBe(error)
+
+    expect(operation).toHaveBeenCalledTimes(1)
+    expect(await getServiceNowInstance(alias)).toBe(cached)
+  })
+
   it('still retries a transport failure once with a fresh instance', async () => {
     const alias = 'retry-transport'
     mockGetCredentials.mockResolvedValue({
