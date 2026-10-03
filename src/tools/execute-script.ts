@@ -4,6 +4,9 @@ import { BackgroundScriptExecutor } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
 import { annotationsFor } from "../common/annotations.js";
 
+/** The `code` core puts on ScriptScopeError. */
+const SCRIPT_SCOPE_ERROR_CODE = "NEX_SCRIPT_SCOPE_UNAVAILABLE";
+
 /**
  * Registers the execute_script tool on the MCP server.
  *
@@ -20,13 +23,16 @@ export function registerExecuteScriptTool(server: McpServer): void {
         "Execute JavaScript on a ServiceNow instance using Scripts - Background " +
         "(the /sys.scripts.do endpoint). The script runs server-side with full " +
         "GlideSystem API access (gs, GlideRecord, GlideAggregate, GlideDateTime, " +
-        "GlideUser, etc.). Use gs.print() or gs.info() to produce output.\n\n" +
+        "GlideUser, etc.). Use gs.info() to produce output (gs.print() also works in global, but prints nothing in a scoped app).\n\n" +
         "SCOPE BEHAVIOR: Scripts execute within the specified application scope. " +
         "When running in a scoped app (e.g., scope: 'x_myapp_custom'), you can " +
         "reference that scope's Script Includes and classes directly by name " +
         "(e.g., MyUtil.doSomething()) without fully-qualifying them. When running " +
         "in global scope, scoped classes must be fully-qualified " +
-        "(e.g., x_myapp_custom.MyUtil.doSomething()).\n\n" +
+        "(e.g., x_myapp_custom.MyUtil.doSomething()). Only 'global' and applications " +
+        "developed on the instance (sys_app) can be used; installed store apps " +
+        "(sys_store_app) cannot — run in global and call their APIs fully-qualified. " +
+        "In a scoped app, use gs.info() for output: gs.print() is global-only.\n\n" +
         "IMPORTANT: This executes code directly on the ServiceNow instance. " +
         "Always review scripts before execution and prefer read-only operations " +
         "unless modification is explicitly intended.",
@@ -45,7 +51,7 @@ export function registerExecuteScriptTool(server: McpServer): void {
           .string()
           .describe(
             "The JavaScript code to execute on the ServiceNow instance. " +
-            "Use gs.print() or gs.info() to output results — these are the only " +
+            "Use gs.info() (or, in global only, gs.print()) to output results — these are the only " +
             "ways to capture output from background scripts. The script runs in " +
             "the server-side Rhino engine with access to all ServiceNow server-side " +
             "APIs: GlideRecord, GlideAggregate, GlideDateTime, GlideUser, " +
@@ -56,9 +62,11 @@ export function registerExecuteScriptTool(server: McpServer): void {
           .string()
           .default("global")
           .describe(
-            "The application scope to execute the script in. Accepts either:\n" +
-            '- A scope name (e.g., "global", "x_myapp_custom", "x_snc_app") — ' +
-            "automatically resolved to the corresponding sys_id via the sys_scope table.\n" +
+            "The application scope to execute the script in. Accepts:\n" +
+            '- "global" — the Global scope.\n' +
+            '- The scope of an application developed on the instance (a sys_app, e.g. ' +
+            '"x_myapp_custom") — resolved to its sys_id via the sys_app table. ' +
+            "Installed store apps (sys_store_app) are rejected with an explanation.\n" +
             "- A sys_id directly (32-character hex string) if already known.\n\n" +
             'Defaults to "global". Set this to the target app scope when you need ' +
             "to access scoped Script Includes, Business Rules, or other scoped " +
@@ -98,7 +106,7 @@ export function registerExecuteScriptTool(server: McpServer): void {
             content: [
               {
                 type: "text" as const,
-                text: "Script executed but returned no output. If you expected output, make sure your script uses gs.print() or gs.info().",
+                text: "Script executed but returned no output. If you expected output, make sure your script uses gs.print() or gs.info() (gs.info() in a scoped app, where gs.print() prints nothing).",
               },
             ],
           };
@@ -128,11 +136,20 @@ export function registerExecuteScriptTool(server: McpServer): void {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error);
+        // An unusable scope (store app, typo, …) fails before the script is sent, and
+        // core's message already says why and what to do — say that, not "error
+        // executing script", which reads as if the script itself ran and failed.
+        // Matched by code, not by importing ScriptScopeError, so an older core
+        // without that export cannot break this module at load.
+        const isScopeError =
+          (error as { code?: unknown } | null)?.code === SCRIPT_SCOPE_ERROR_CODE;
         return {
           content: [
             {
               type: "text" as const,
-              text: `Error executing script: ${message}`,
+              text: isScopeError
+                ? `Script not run. ${message}`
+                : `Error executing script: ${message}`,
             },
           ],
           isError: true,
