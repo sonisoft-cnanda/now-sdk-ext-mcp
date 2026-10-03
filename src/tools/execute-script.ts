@@ -106,7 +106,7 @@ export function registerExecuteScriptTool(server: McpServer): void {
             content: [
               {
                 type: "text" as const,
-                text: "Script executed but returned no output. If you expected output, make sure your script uses gs.print() or gs.info().",
+                text: "Script executed but returned no output. If you expected output, make sure your script uses gs.print() or gs.info() (gs.info() in a scoped app, where gs.print() prints nothing).",
               },
             ],
           };

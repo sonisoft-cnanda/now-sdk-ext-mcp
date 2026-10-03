@@ -328,5 +328,20 @@ describe('execute_script tool', () => {
       expect(text).toBe(`Script not run: scope "x_acme_util" could not be used. ${message}`)
       expect(text).not.toContain('Error executing script')
     })
+
+    it('should keep the generic text for errors carrying a different code', async () => {
+      mockExecuteScript.mockRejectedValue(Object.assign(new Error('Session authentication failed.'), {
+        code: 'NEX_SESSION_EXPIRED',
+      }))
+
+      const result = await client.callTool({
+        name: 'execute_script',
+        arguments: { script: 'gs.info("x");', scope: 'global' },
+      })
+
+      expect(result.isError).toBe(true)
+      const text = (result.content as any[])[0].text
+      expect(text).toBe('Error executing script: Session authentication failed.')
+    })
   })
 })
