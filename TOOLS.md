@@ -95,7 +95,7 @@ The script runs server-side with full GlideSystem API access (`GlideRecord`, `Gl
 |-----------|------|----------|---------|-------------|
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias (e.g., `"myinstance"`, `"prod"`). This is the alias configured via `snc configure`. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
 | `script` | string | **Yes** | — | The JavaScript code to execute. Use `gs.print()` to output results. |
-| `scope` | string | No | `"global"` | The application scope to execute in. Use `"global"` for global scope, or an app scope like `"x_myapp_custom"`. |
+| `scope` | string | No | `"global"` | The application scope to execute in: `"global"`, the scope of an application developed on the instance (a `sys_app`, e.g. `"x_myapp_custom"`), or a scope sys_id. Installed store apps (`sys_store_app`) are rejected before the script is sent, with a message saying what the scope is and what to do instead. |
 | `params` | object | No | — | Key-value pairs for parameter substitution. Occurrences of `{paramName}` in the script are replaced with the corresponding value. |
 
 ### Example Usage

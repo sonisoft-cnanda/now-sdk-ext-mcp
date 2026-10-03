@@ -4,6 +4,9 @@ import { BackgroundScriptExecutor } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
 import { annotationsFor } from "../common/annotations.js";
 
+/** The `code` core puts on ScriptScopeError. */
+const SCRIPT_SCOPE_ERROR_CODE = "NEX_SCRIPT_SCOPE_UNAVAILABLE";
+
 /**
  * Registers the execute_script tool on the MCP server.
  *
@@ -26,7 +29,10 @@ export function registerExecuteScriptTool(server: McpServer): void {
         "reference that scope's Script Includes and classes directly by name " +
         "(e.g., MyUtil.doSomething()) without fully-qualifying them. When running " +
         "in global scope, scoped classes must be fully-qualified " +
-        "(e.g., x_myapp_custom.MyUtil.doSomething()).\n\n" +
+        "(e.g., x_myapp_custom.MyUtil.doSomething()). Only 'global' and applications " +
+        "developed on the instance (sys_app) can be used; installed store apps " +
+        "(sys_store_app) cannot — run in global and call their APIs fully-qualified. " +
+        "In a scoped app, use gs.info() for output: gs.print() is global-only.\n\n" +
         "IMPORTANT: This executes code directly on the ServiceNow instance. " +
         "Always review scripts before execution and prefer read-only operations " +
         "unless modification is explicitly intended.",
@@ -56,9 +62,11 @@ export function registerExecuteScriptTool(server: McpServer): void {
           .string()
           .default("global")
           .describe(
-            "The application scope to execute the script in. Accepts either:\n" +
-            '- A scope name (e.g., "global", "x_myapp_custom", "x_snc_app") — ' +
-            "automatically resolved to the corresponding sys_id via the sys_scope table.\n" +
+            "The application scope to execute the script in. Accepts:\n" +
+            '- "global" — the Global scope.\n' +
+            '- The scope of an application developed on the instance (a sys_app, e.g. ' +
+            '"x_myapp_custom") — resolved to its sys_id via the sys_app table. ' +
+            "Installed store apps (sys_store_app) are rejected with an explanation.\n" +
             "- A sys_id directly (32-character hex string) if already known.\n\n" +
             'Defaults to "global". Set this to the target app scope when you need ' +
             "to access scoped Script Includes, Business Rules, or other scoped " +
@@ -128,11 +136,20 @@ export function registerExecuteScriptTool(server: McpServer): void {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : String(error);
+        // An unusable scope (store app, typo, …) fails before the script is sent, and
+        // core's message already says why and what to do — say that, not "error
+        // executing script", which reads as if the script itself ran and failed.
+        // Matched by code, not by importing ScriptScopeError, so an older core
+        // without that export cannot break this module at load.
+        const isScopeError =
+          (error as { code?: unknown } | null)?.code === SCRIPT_SCOPE_ERROR_CODE;
         return {
           content: [
             {
               type: "text" as const,
-              text: `Error executing script: ${message}`,
+              text: isScopeError
+                ? `Script not run: scope "${scope}" could not be used. ${message}`
+                : `Error executing script: ${message}`,
             },
           ],
           isError: true,

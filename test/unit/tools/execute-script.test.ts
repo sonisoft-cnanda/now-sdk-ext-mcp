@@ -305,5 +305,28 @@ describe('execute_script tool', () => {
       expect(text).toContain('Error executing script')
       expect(text).toContain('403')
     })
+
+    it('should say the script was not run, and why, when the scope cannot be used', async () => {
+      const message =
+        "Scope 'x_acme_util' (Acme Utilities) is an installed store/repository application (sys_store_app). " +
+        'Scripts - Background can only run in "global" or in an application developed on this instance (sys_app). ' +
+        'Run the script in "global" and call the application\'s API fully qualified (e.g. x_acme_util.MyScriptInclude).'
+      // The shape core's ScriptScopeError arrives in; recognised by code.
+      mockExecuteScript.mockRejectedValue(Object.assign(new Error(message), {
+        code: 'NEX_SCRIPT_SCOPE_UNAVAILABLE',
+        reason: 'NOT_A_DEVELOPED_APP',
+        scope: 'x_acme_util',
+      }))
+
+      const result = await client.callTool({
+        name: 'execute_script',
+        arguments: { script: 'gs.info("x");', scope: 'x_acme_util' },
+      })
+
+      expect(result.isError).toBe(true)
+      const text = (result.content as any[])[0].text
+      expect(text).toBe(`Script not run: scope "x_acme_util" could not be used. ${message}`)
+      expect(text).not.toContain('Error executing script')
+    })
   })
 })
