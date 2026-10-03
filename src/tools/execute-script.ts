@@ -23,7 +23,7 @@ export function registerExecuteScriptTool(server: McpServer): void {
         "Execute JavaScript on a ServiceNow instance using Scripts - Background " +
         "(the /sys.scripts.do endpoint). The script runs server-side with full " +
         "GlideSystem API access (gs, GlideRecord, GlideAggregate, GlideDateTime, " +
-        "GlideUser, etc.). Use gs.print() or gs.info() to produce output.\n\n" +
+        "GlideUser, etc.). Use gs.info() to produce output (gs.print() also works in global, but prints nothing in a scoped app).\n\n" +
         "SCOPE BEHAVIOR: Scripts execute within the specified application scope. " +
         "When running in a scoped app (e.g., scope: 'x_myapp_custom'), you can " +
         "reference that scope's Script Includes and classes directly by name " +
@@ -51,7 +51,7 @@ export function registerExecuteScriptTool(server: McpServer): void {
           .string()
           .describe(
             "The JavaScript code to execute on the ServiceNow instance. " +
-            "Use gs.print() or gs.info() to output results — these are the only " +
+            "Use gs.info() (or, in global only, gs.print()) to output results — these are the only " +
             "ways to capture output from background scripts. The script runs in " +
             "the server-side Rhino engine with access to all ServiceNow server-side " +
             "APIs: GlideRecord, GlideAggregate, GlideDateTime, GlideUser, " +
