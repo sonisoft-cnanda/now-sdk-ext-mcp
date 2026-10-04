@@ -16,8 +16,20 @@
  * process may ever write to fd 1.
  */
 
+import { createRequire } from "node:module";
 import { Logger, configureLogging, redactValue } from "@sonisoft/now-sdk-ext-core";
 import { logger as sdkLogger } from "@servicenow/sdk-cli/dist/logger/index.js";
+
+/** The SDK logger module, wherever it was installed. */
+const SDK_LOGGER_PATH = /@servicenow[\\/]sdk-cli[\\/]dist[\\/]logger[\\/]index\.js$/;
+
+type SdkLogger = Record<"info" | "warn" | "error" | "debug", (...args: unknown[]) => void> & {
+    setLevel(level: string): void;
+};
+
+const isSdkLogger = (value: unknown): value is SdkLogger =>
+    typeof (value as SdkLogger | undefined)?.setLevel === "function"
+    && ["info", "warn", "error", "debug"].every(level => typeof (value as Record<string, unknown>)[level] === "function");
 
 let configured = false;
 
@@ -44,17 +56,59 @@ export function initLogging(): void {
         // resolves those; naming them here would override an operator's NEX_LOG_FILE=0.
     });
     const sdkLog = getLogger("ServiceNow SDK");
-    sdkLogger.setLevel("silent");
-    for (const level of ["info", "warn", "error", "debug"] as const) {
-        sdkLogger[level] = (...args: unknown[]): void => {
-            const message = args.map(arg => {
-                if (typeof arg === "string") return arg;
-                try { return JSON.stringify(redactValue(arg)) ?? String(arg); }
-                catch { return "[unserializable]"; }
-            }).join(" ");
-            sdkLog[level](message || "ServiceNow SDK");
-        };
+    // Every copy of the SDK's logger, not just the one this package resolves. When this
+    // package's @servicenow/sdk-cli and core's differ, core loads its own copy, and that
+    // is the copy that refreshes OAuth tokens. Unpatched, it printed "[now-sdk] Access
+    // Token has expired, refreshing token" through console.log, onto fd 1. Core has
+    // already been imported by now, so its copy is in the module cache.
+    //
+    // This finds CommonJS copies only (require.cache), which is what the SDK ships today.
+    // Should a release move its logger to ESM, the console backstop below still catches
+    // its console.log output, and scripts/sdk-watch/stdio-smoke.mjs checks fd 1 directly.
+    const cache = createRequire(import.meta.url).cache;
+    const copies = new Set<SdkLogger>(isSdkLogger(sdkLogger) ? [sdkLogger] : []);
+    for (const [path, mod] of Object.entries(cache)) {
+        const exported = (mod?.exports as { logger?: unknown } | undefined)?.logger;
+        if (SDK_LOGGER_PATH.test(path) && isSdkLogger(exported)) copies.add(exported);
     }
+    for (const copy of copies) {
+        copy.setLevel("silent");
+        for (const level of ["info", "warn", "error", "debug"] as const) {
+            copy[level] = (...args: unknown[]): void => sdkLog[level](toMessage(args) || "ServiceNow SDK");
+        }
+    }
+
+    // And a backstop for anything else that reaches for console.log, info or debug: a
+    // copy loaded later, or another library. Those write to stdout; route them to stderr
+    // through the redacting logger instead. warn and error already go to stderr. Core's
+    // logger writes to a process.stderr stream, never console, so this cannot recurse;
+    // the guard keeps it that way if that ever changes.
+    const consoleLog = getLogger("console");
+    let routing = false;
+    const route = (level: "info" | "debug") => (...args: unknown[]): void => {
+        if (routing) {
+            process.stderr.write(`${toMessage(args)}\n`);
+            return;
+        }
+        routing = true;
+        try {
+            consoleLog[level](toMessage(args));
+        } finally {
+            routing = false;
+        }
+    };
+    console.log = route("info");
+    console.info = route("info");
+    console.debug = route("debug");
+}
+
+/** Joins log arguments, serialising anything that is not a string through redaction. */
+function toMessage(args: unknown[]): string {
+    return args.map(arg => {
+        if (typeof arg === "string") return arg;
+        try { return JSON.stringify(redactValue(arg)) ?? String(arg); }
+        catch { return "[unserializable]"; }
+    }).join(" ");
 }
 
 /**
