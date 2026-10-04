@@ -30,11 +30,14 @@ if (!startupOnly && !alias) {
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const work = mkdtempSync(join(tmpdir(), 'mcp-smoke-'));
 const hook = join(work, 'telemetry-hook.cjs');
-writeFileSync(hook, `const M = require('node:module'); const load = M._load;
-M._load = function (request) {
-  if (/posthog|telemetry/i.test(request)) process.stderr.write('TELEMETRY_LOAD ' + request + '\\n');
-  return load.apply(this, arguments);
-};\n`);
+// module.registerHooks resolves both require() and import(), so it also sees the SDK's
+// `await import('posthog-node')`, which a Module._load patch (CommonJS only) would miss.
+writeFileSync(hook, `require('node:module').registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (/posthog|telemetry/i.test(specifier)) process.stderr.write('TELEMETRY_LOAD ' + specifier + '\\n');
+    return nextResolve(specifier, context);
+  },
+});\n`);
 
 const env = {
     ...process.env,

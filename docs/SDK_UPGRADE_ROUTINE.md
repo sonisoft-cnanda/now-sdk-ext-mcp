@@ -124,7 +124,7 @@ stdout is the JSON-RPC transport. Any stray line there breaks the client's strea
    ```
    When core's SDK version moved, expect `package-lock.json` to grow: npm nests core's SDK tree
    while this repo pins a different SDK. Aligning the SDK pins (`--sdk <core's pin>`) removes
-   that; see issue #23.
+   that; see [issue #23](https://github.com/sonisoft-cnanda/now-sdk-ext-mcp/issues/23).
 3. PR `fix(deps): use now-sdk-ext-core <v> and sn-credstore <v>`. QA runs `qa-sdk.sh --live`.
 4. Squash-merge, then `scripts/sdk-watch/watch-release.sh <merge-sha>`. MCP clients pick up the
    new version on their next start (npx) or after a reinstall.
@@ -137,6 +137,11 @@ SN_CRED_STORE=file SN_INSTANCE_ALIAS=<pdi-alias> \
   QA_APP_SCOPE=<sys_app scope> QA_STORE_APP_SCOPE=<store app scope> \
   scripts/sdk-watch/qa-sdk.sh --live --global-sdk <new-sdk-version>
 ```
+Run the live session **without** `NEX_POLICY_DENY` restricting `execute` or `write`. The
+server's permission guard classes `execute_script` as both, since it can run any script, so a
+deny turns the scope checks into refusals that look like regressions. The smoke test itself only
+runs `gs.info()`.
+
 The `stdout carries only JSON-RPC` check only exercises the token-refresh path when the
 alias's access token has expired at the time of the run. For a full check, run it once with an
 expired token: they last about 30 minutes, so check the expiry with

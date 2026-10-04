@@ -64,7 +64,9 @@ function credstoreAllowlist(version) {
         execFileSync('tar', ['xzf', join(dir, packed.filename), '-C', join(dir, 'x')]);
         const source = readFileSync(join(dir, 'x/package/dist/esm/shim/locateSdkCli.js'), 'utf8');
         const match = source.match(/KNOWN_GOOD_VERSIONS = new Set\(\[([^\]]*)\]\)/);
-        return match ? [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : [];
+        // An empty list would read as "nothing is allowlisted" and quietly block every bump.
+        if (!match) throw new Error(`cannot read KNOWN_GOOD_VERSIONS from @sonisoft/sn-credstore@${version}; its build layout changed, update credstoreAllowlist()`);
+        return [...match[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
     } finally {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -143,9 +145,13 @@ function check() {
 }
 
 function bump(args) {
-    const opt = (n) => {
+    // Every flag takes a value: a release (x.y.z) or the keyword it names.
+    const opt = (n, keyword) => {
         const i = args.indexOf(n);
-        return i >= 0 ? args[i + 1] : undefined;
+        if (i < 0) return undefined;
+        const v = args[i + 1];
+        if (!v || (v !== keyword && !isRelease(v))) throw new Error(`${n} needs a version (x.y.z) or "${keyword}", got ${v ?? 'nothing'}`);
+        return v;
     };
     const changes = [];
     const set = (name, value) => {
@@ -157,16 +163,16 @@ function bump(args) {
     const resolveLatest = (name, v) => (v === 'latest' ? npmView(name, 'dist-tags')?.latest : v);
     const style = (name, v) => (CONFIG.internal[name] === 'exact' ? v : `^${v}`);
 
-    const credstoreArg = opt('--credstore');
+    const credstoreArg = opt('--credstore', 'latest');
     const credstore = credstoreArg && resolveLatest('@sonisoft/sn-credstore', credstoreArg);
     if (credstore) set('@sonisoft/sn-credstore', style('@sonisoft/sn-credstore', credstore));
-    const coreArg = opt('--core');
+    const coreArg = opt('--core', 'latest');
     const core = coreArg && resolveLatest('@sonisoft/now-sdk-ext-core', coreArg);
     if (core) set('@sonisoft/now-sdk-ext-core', style('@sonisoft/now-sdk-ext-core', core));
 
-    let sdk = opt('--sdk');
+    let sdk = opt('--sdk', 'candidate');
     if (sdk === 'candidate') sdk = check().sdk.candidate;
-    if (opt('--sdk') && !sdk) emit({ ok: false, error: 'no SDK candidate: nothing newer is allowlisted by sn-credstore yet' }, 1);
+    if (opt('--sdk', 'candidate') && !sdk) emit({ ok: false, error: 'no SDK candidate: nothing newer is allowlisted by sn-credstore yet' }, 1);
     if (sdk) {
         for (const name of CONFIG.sdkPackages) {
             if (declared(name) && npmView(`${name}@${sdk}`, 'version') !== sdk) emit({ ok: false, error: `${name}@${sdk} is not published` }, 1);

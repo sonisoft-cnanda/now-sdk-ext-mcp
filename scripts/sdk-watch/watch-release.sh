@@ -17,7 +17,12 @@ sha="${1:?usage: watch-release.sh <merge-commit-sha>}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 repo="$(cd "$root" && gh repo view --json nameWithOwner --jq .nameWithOwner)"
 pkg="$(node -p "require('$root/package.json').name")"
-result() { printf '{"repo":"%s","package":"%s","sha":"%s","stage":"%s","ok":%s,"detail":"%s"}\n' "$repo" "$pkg" "$sha" "$1" "$2" "$3"; exit "$4"; }
+result() { # result <stage> <true|false> <detail> <exit-code>: serialised by node, so any text is safe
+    node -e 'const [repo, pkg, sha, stage, ok, detail] = process.argv.slice(1);
+        process.stdout.write(JSON.stringify({ repo, package: pkg, sha, stage, ok: ok === "true", detail }) + "\n");' \
+        "$repo" "$pkg" "$sha" "$1" "$2" "$3"
+    exit "$4"
+}
 
 rid=""
 for _ in $(seq 1 30); do
@@ -37,6 +42,8 @@ rm -f "$release_log"
 [[ -n "$version" ]] || result release true "run $rid succeeded without cutting a release (no fix/feat commits)" 3
 echo "released $version" >&2
 
+# publish.yml runs are titled after the release tag ("v<version>", semantic-release's default
+# tagFormat); match on that. A changed tagFormat needs this select changed too.
 pid=""
 for _ in $(seq 1 30); do
     pid="$(gh run list -R "$repo" --workflow=publish.yml --limit 10 --json databaseId,displayTitle \
