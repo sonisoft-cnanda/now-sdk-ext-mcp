@@ -191,7 +191,8 @@ function bump(args) {
     writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
     if (!args.includes('--no-install')) {
         log('npm install ...');
-        execFileSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: root, stdio: ['ignore', 'inherit', 'inherit'] });
+        // npm's own output to stderr: stdout carries only this script's JSON result.
+        execFileSync('npm', ['install', '--no-audit', '--no-fund'], { cwd: root, stdio: ['ignore', 2, 2] });
     }
     const after = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'));
     emit({
