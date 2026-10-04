@@ -16,6 +16,7 @@
  * process may ever write to fd 1.
  */
 
+import { createRequire } from "node:module";
 import { Logger, configureLogging, redactValue } from "@sonisoft/now-sdk-ext-core";
 import { logger as sdkLogger } from "@servicenow/sdk-cli/dist/logger/index.js";
 
@@ -44,17 +45,47 @@ export function initLogging(): void {
         // resolves those; naming them here would override an operator's NEX_LOG_FILE=0.
     });
     const sdkLog = getLogger("ServiceNow SDK");
-    sdkLogger.setLevel("silent");
-    for (const level of ["info", "warn", "error", "debug"] as const) {
-        sdkLogger[level] = (...args: unknown[]): void => {
-            const message = args.map(arg => {
-                if (typeof arg === "string") return arg;
-                try { return JSON.stringify(redactValue(arg)) ?? String(arg); }
-                catch { return "[unserializable]"; }
-            }).join(" ");
-            sdkLog[level](message || "ServiceNow SDK");
-        };
+    // Every copy of the SDK's logger, not just the one this package resolves. When this
+    // package's @servicenow/sdk-cli and core's differ, core loads its own copy, and that
+    // is the copy that refreshes OAuth tokens. Unpatched, it printed "[now-sdk] Access
+    // Token has expired, refreshing token" through console.log, onto fd 1. Core has
+    // already been imported by now, so its copy is in the module cache.
+    const cache = createRequire(import.meta.url).cache;
+    const copies = new Set<SdkLogger>([sdkLogger as SdkLogger]);
+    for (const [path, mod] of Object.entries(cache)) {
+        const exported = (mod?.exports as { logger?: SdkLogger } | undefined)?.logger;
+        if (SDK_LOGGER_PATH.test(path) && exported) copies.add(exported);
     }
+    for (const copy of copies) {
+        copy.setLevel("silent");
+        for (const level of ["info", "warn", "error", "debug"] as const) {
+            copy[level] = (...args: unknown[]): void => sdkLog[level](toMessage(args) || "ServiceNow SDK");
+        }
+    }
+
+    // And a backstop for anything else that reaches for console.log, info or debug: a
+    // copy loaded later, or another library. Those write to stdout; route them to stderr
+    // through the redacting logger instead. warn and error already go to stderr.
+    const consoleLog = getLogger("console");
+    console.log = (...args: unknown[]): void => consoleLog.info(toMessage(args));
+    console.info = (...args: unknown[]): void => consoleLog.info(toMessage(args));
+    console.debug = (...args: unknown[]): void => consoleLog.debug(toMessage(args));
+}
+
+/** The SDK logger module, wherever it was installed. */
+const SDK_LOGGER_PATH = /@servicenow[\\/]sdk-cli[\\/]dist[\\/]logger[\\/]index\.js$/;
+
+type SdkLogger = Record<"info" | "warn" | "error" | "debug", (...args: unknown[]) => void> & {
+    setLevel(level: string): void;
+};
+
+/** Joins log arguments, serialising anything that is not a string through redaction. */
+function toMessage(args: unknown[]): string {
+    return args.map(arg => {
+        if (typeof arg === "string") return arg;
+        try { return JSON.stringify(redactValue(arg)) ?? String(arg); }
+        catch { return "[unserializable]"; }
+    }).join(" ");
 }
 
 /**
