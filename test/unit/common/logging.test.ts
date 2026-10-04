@@ -159,12 +159,14 @@ process.stdout.write(JSON.stringify({ok: true}));
         expect(result.stderr.includes('Access Token has expired')).toBe(level === 'info');
     });
 
-    it("routes core's own copy of the SDK logger to stderr too", () => {
-        // When this package's @servicenow/sdk-cli and core's differ, core loads a second
-        // copy, and that copy is the one that refreshes OAuth tokens. Unpatched, its
-        // "Access Token has expired" line went to stdout mid-session.
-        const nested = path.join(REPO, "node_modules/@sonisoft/now-sdk-ext-core/node_modules/@servicenow/sdk-cli/dist/logger/index.js");
-        const copy = fs.existsSync(nested) ? nested : path.join(REPO, "node_modules/@servicenow/sdk-cli/dist/logger/index.js");
+    // When this package's @servicenow/sdk-cli and core's differ, core loads a second copy,
+    // and that copy is the one that refreshes OAuth tokens. Unpatched, its "Access Token
+    // has expired" line went to stdout mid-session. With one shared copy (versions aligned)
+    // there is nothing separate to test, so the case is skipped rather than passing on the
+    // shared copy.
+    const nested = path.join(REPO, "node_modules/@sonisoft/now-sdk-ext-core/node_modules/@servicenow/sdk-cli/dist/logger/index.js");
+    (fs.existsSync(nested) ? it : it.skip)("routes core's own copy of the SDK logger to stderr too", () => {
+        const copy = nested;
         const script = `
 import ${JSON.stringify(path.join(REPO, "node_modules/@sonisoft/now-sdk-ext-core/dist/index.js"))};
 import { createRequire } from 'node:module';
@@ -188,6 +190,7 @@ initLogging();
 console.log('stray log line', {password: 'fixture-console-password'});
 console.info('stray info line');
 console.debug('stray debug line');
+console.log(new Error('stray error object'));
 await flushLogs();
 process.stdout.write(JSON.stringify({ok: true}));
 `;
@@ -197,6 +200,7 @@ process.stdout.write(JSON.stringify({ok: true}));
         expect(result.stderr).toContain("stray log line");
         expect(result.stderr).toContain("stray info line");
         expect(result.stderr).toContain("stray debug line");
+        expect(result.stderr).toContain("stray error object");
         expect(result.stderr).not.toContain("fixture-console-password");
     });
 
