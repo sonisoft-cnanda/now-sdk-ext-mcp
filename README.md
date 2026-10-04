@@ -521,6 +521,12 @@ Since stdout is reserved for JSON-RPC, **never use `console.log()` in server cod
 - Every tool that talks to ServiceNow should accept an optional `instance` parameter
 - Test every tool through the MCP client (not by calling handler functions directly) so the full protocol stack is exercised
 
+## ServiceNow SDK upgrades
+
+New `@servicenow/sdk` releases are rolled through sn-credstore, core, the CLI and the MCP
+server by a scheduled routine. Its runbook and scripts (`scripts/sdk-watch/`) are described in
+[docs/SDK_UPGRADE_ROUTINE.md](docs/SDK_UPGRADE_ROUTINE.md).
+
 ## License
 
 MIT
