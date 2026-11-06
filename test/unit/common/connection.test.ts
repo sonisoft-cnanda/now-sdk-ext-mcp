@@ -235,6 +235,16 @@ describe('getServiceNowInstance', () => {
     expect(operation.mock.calls[0]![0]).not.toBe(operation.mock.calls[1]![0])
   })
 
+  it('does not replay an operation that asks for no retry', async () => {
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'fixture-user', password: 'fabricated', instanceUrl: 'https://fixture.invalid',
+    })
+    const error = Object.assign(new Error('ECONNRESET'), { code: 'ECONNRESET' })
+    const operation = jest.fn<(instance: InstanceType<typeof ServiceNowInstance>) => Promise<string>>().mockRejectedValue(error)
+    await expect(withConnectionRetry('no-retry', operation, { elevatedRoles: ['security_admin'], retry: false })).rejects.toBe(error)
+    expect(operation).toHaveBeenCalledTimes(1)
+  })
+
   it('retries an elevated operation on a fresh elevated instance, leaving the plain one cached', async () => {
     const alias = 'retry-elevated'
     mockGetCredentials.mockResolvedValue({

@@ -173,7 +173,8 @@ describe('writes', () => {
     const { text, isError } = await call('create_acl', { instance: 'dev', scope: 'x_app', update_set: SET, operation: 'read',
       table: 'x_app_thing', roles: ['x_app.agent'], admin_overrides: false, decision_type: 'allow' })
     expect(isError).toBe(false)
-    expect(options()).toEqual({ elevatedRoles: ['security_admin'] })
+    // Elevated, and never replayed after a transport error: the first attempt may have landed.
+    expect(options()).toEqual({ elevatedRoles: ['security_admin'], retry: false })
     expect(manager.create).toHaveBeenCalledWith({ scope: { scope: 'x_app' }, updateSet: SET, operation: 'read', table: 'x_app_thing',
       roles: ['x_app.agent'], adminOverrides: false, decisionType: 'allow' })
     expect(text).toContain('Removed the role the platform added on its own: snc_internal')
@@ -232,7 +233,7 @@ describe('writes', () => {
     expect(manager.addRole).toHaveBeenCalledWith(ACL, 'x_app.lead', { scope: 'global', updateSet: SET })
     await call('remove_acl_role', { sys_id: ACL, role: 'itil', scope: 'global', update_set: SET })
     expect(manager.removeRole).toHaveBeenCalledWith(ACL, 'itil', { scope: 'global', updateSet: SET })
-    expect(options()).toEqual({ elevatedRoles: ['security_admin'] })
+    expect(options()).toEqual({ elevatedRoles: ['security_admin'], retry: false })
   })
 
   it('reports a partial change with the ACL\'s state and the step that failed', async () => {

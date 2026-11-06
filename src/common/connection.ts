@@ -33,6 +33,12 @@ export interface ConnectionOptions {
    * that do not ask for elevation never run on an elevated session.
    */
   elevatedRoles?: readonly string[];
+  /**
+   * false: do not re-run the operation on a fresh connection after a transport error. For a write
+   * that may have landed before its response was lost: a replay would report a change that applied
+   * as a failure (role_already_present, acl_not_found) or apply it twice.
+   */
+  retry?: boolean;
 }
 
 /** The cache key: the alias, plus the elevated roles when there are any (core keys its sessions the same way). */
@@ -117,6 +123,10 @@ export async function getServiceNowInstance(
   };
 
   const instance = new ServiceNowInstance(snSettings);
+  if (options?.elevatedRoles?.length) {
+    // An audit trail of elevated connections: the session stays elevated on the instance until its idle timeout.
+    log.info("Opened an elevated connection", { alias: resolvedAlias, roles: [...options.elevatedRoles] });
+  }
   instanceCache.set(key, {
     instance,
     createdAt: Date.now(),
@@ -198,7 +208,7 @@ export async function withConnectionRetry<T>(
   try {
     return await operation(snInstance);
   } catch (error) {
-    if (isRetryableError(error)) {
+    if (options?.retry !== false && isRetryableError(error)) {
       // The error went into the message before, unredacted — an auth or HTTP failure
       // here carries a live session. As metadata it goes through redaction.
       log.warn("Retryable error, refreshing session and retrying", { error });

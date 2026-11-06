@@ -30,6 +30,8 @@ import { annotationsFor } from "../common/annotations.js";
 
 const SECURITY_ADMIN = ["security_admin"];
 const ELEVATED: ConnectionOptions = { elevatedRoles: SECURITY_ADMIN };
+/** The writes: elevated, and never replayed after a transport error (the first attempt may have landed). */
+const ELEVATED_WRITE: ConnectionOptions = { ...ELEVATED, retry: false };
 
 const instanceParam = z
   .string()
@@ -48,6 +50,7 @@ const sysIdParam = (what: string) => z.string().regex(/^[0-9a-f]{32}$/, "a 32-ch
 const targetParams = {
   scope: z
     .string()
+    .regex(/^[a-z0-9_]{1,80}$/i)
     .optional()
     .describe('The ACL\'s application: its scope name (e.g. "x_acme_app"), or "global". Give this or scope_id.'),
   scope_id: z
@@ -195,15 +198,15 @@ export function aclErrorText(action: string, error: unknown) {
   if (error instanceof ToolInputError) {
     lines.push(`Error (${action}): ${error.message}`);
   } else if (error instanceof RoleElevationError) {
-    lines.push(`Error (${action}): role elevation failed: ${error.code}${error.roles.length ? ` (${error.roles.join(", ")})` : ""}`);
-    if (error.available.length) lines.push(`Roles this user may elevate to: ${error.available.join(", ")}`);
+    lines.push(`Error (${action}): role elevation failed: ${error.code}${error.roles.length ? ` (${error.roles.map(clean).join(", ")})` : ""}`);
+    if (error.available.length) lines.push(`Roles this user may elevate to: ${error.available.map(clean).join(", ")}`);
     if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
   } else if (isPolicyRefusal(error)) {
     lines.push(`Error (${action}): refused by policy: ${cleanMessage((error as Error).message)}`);
   } else if (error instanceof AclPartialError) {
     lines.push(
-      `Error (${action}): partially_applied: the ${error.operation} of ACL ${error.aclSysId} stopped part way; ` +
-        `the ACL is ${error.state} (read back).`
+      `Error (${action}): partially_applied: the ${clean(error.operation)} of ACL ${clean(error.aclSysId)} stopped part way; ` +
+        `the ACL is ${clean(error.state)} (read back).`
     );
     lines.push(`Failed step: ${cleanMessage(error.cause instanceof Error ? error.cause.message : String(error.cause))}`);
     lines.push(REMEDIATION.partially_applied);
@@ -245,7 +248,7 @@ export function registerListAclsTool(server: McpServer): void {
         instance: instanceParam,
         table: z.string().regex(IDENT).optional().describe("ACLs of this table: the table, table.* and table.<field>."),
         name: z.string().optional().describe("Exact ACL name, e.g. incident.short_description or a UI page name."),
-        scope: z.string().optional().describe('Only this application\'s ACLs: a scope name, or "global".'),
+        scope: z.string().regex(IDENT).optional().describe('Only this application\'s ACLs: a scope name, or "global".'),
         scope_id: z.string().regex(/^[0-9a-f]{32}$/).optional().describe("Only this application's ACLs, by sys_scope sys_id."),
         operation: z.string().regex(IDENT).optional().describe("Operation name: read, write, create, delete, execute, ..."),
         type: z.string().regex(IDENT).optional().describe("ACL type: record, ui_page, rest_endpoint, client_callable_script_include, ..."),
@@ -409,7 +412,7 @@ export function registerCreateAclTool(server: McpServer): void {
               ...(args.decision_type !== undefined ? { decisionType: args.decision_type } : {}),
               ...(args.description !== undefined ? { description: args.description } : {}),
             }),
-          ELEVATED
+          ELEVATED_WRITE
         );
         return resultText("ACL created.", result);
       } catch (error) {
@@ -455,7 +458,7 @@ export function registerUpdateAclTool(server: McpServer): void {
               ...(args.decision_type !== undefined ? { decisionType: args.decision_type } : {}),
               ...(args.description !== undefined ? { description: args.description } : {}),
             }),
-          ELEVATED
+          ELEVATED_WRITE
         );
         return resultText("ACL updated.", result);
       } catch (error) {
@@ -487,7 +490,7 @@ export function registerDeleteAclTool(server: McpServer): void {
         const result = await withConnectionRetry(
           args.instance,
           (sn) => new AclManager(sn).delete(args.sys_id, { ...target(args), confirm: args.confirm }),
-          ELEVATED
+          ELEVATED_WRITE
         );
         return resultText("ACL deleted.", result);
       } catch (error) {
@@ -519,7 +522,7 @@ export function registerAddAclRoleTool(server: McpServer): void {
         const result = await withConnectionRetry(
           args.instance,
           (sn) => new AclManager(sn).addRole(args.sys_id, args.role, target(args)),
-          ELEVATED
+          ELEVATED_WRITE
         );
         return resultText(`Role ${clean(args.role)} added.`, result);
       } catch (error) {
@@ -552,7 +555,7 @@ export function registerRemoveAclRoleTool(server: McpServer): void {
         const result = await withConnectionRetry(
           args.instance,
           (sn) => new AclManager(sn).removeRole(args.sys_id, args.role, target(args)),
-          ELEVATED
+          ELEVATED_WRITE
         );
         return resultText(`Role ${clean(args.role)} removed.`, result);
       } catch (error) {
