@@ -68,7 +68,7 @@ describe('records', () => {
       fields: { name: 'Util', script: 'var Util = Class.create();', active: true, client_callable: false, sys_policy: null } })
     expect(options()).toEqual({ retry: false })
     expect(text).toContain(`Capture: INSERT_OR_UPDATE in FEAT-1 (${SET})`)
-    expect(text).toContain('Instance said: Record [omitted]saved[omitted]')
+    expect(text).toContain('Instance said: Record saved')
   })
 
   it('maps global, a scope sys_id, and a Store acknowledgement', async () => {
@@ -129,6 +129,9 @@ describe('records', () => {
     r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })
     expect(r.text).toContain('not_captured: the write could not be verified (it was attempted)')
     expect(r.text).toContain('Instance said: [redacted] failed')
+    form.update.mockRejectedValue(new MetadataVerificationError('not_captured', 'sys_script_include', REC, undefined, ['saw secret-<b>abc</b> here'], true))
+    r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })
+    expect(r.text).toContain('Instance said: saw [redacted] here')
     expect(r.text).toContain('read the record and its capture before retrying')
     form.update.mockRejectedValue(new MetadataScopeError('invalid_input', { updateSetState: 'complete', updateSetApplication: SCOPE_ID }))
     r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })
@@ -194,7 +197,8 @@ describe('choices', () => {
     }
     choices.removeChoice.mockRejectedValue(new MetadataScopeError('choice_in_use', { records: 4 }))
     const refused = await call('remove_choice', { table: 'incident', column: 'u_level', value: 'high', scope: 'global', update_set: SET })
-    expect(refused.text).toContain('Prefer set_choice with inactive')
+    expect(refused.text).toContain('Prefer inactivating the choice')
+    expect(refused.text).not.toMatch(/\binactive\b/)
   })
 })
 

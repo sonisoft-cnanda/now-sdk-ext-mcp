@@ -35,8 +35,9 @@ const NO_CONTROL = /^[^\p{Cc}]*$/u;
 
 // Values come from the instance: one line each, no control characters (markup stripped from free text).
 const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
+// Markup is stripped before redaction, so a secret split by a tag (sec<b>ret</b>) is redacted whole.
 const cleanMessage = (text: string): string =>
-  redactMessage(text).replace(/<[^>]*>/g, "[omitted]").replace(/<[^>]*$/, "[omitted]").replace(/\p{Cc}/gu, " ").slice(0, 500);
+  redactMessage(text.replace(/<[^>]*>/g, "").replace(/<[^>]*$/, "")).replace(/\p{Cc}/gu, " ").slice(0, 500);
 
 function text(lines: string[]) {
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
@@ -123,7 +124,7 @@ function captureLines(capture: CaptureReport | undefined): string[] {
 const REMEDIATION: Record<string, string> = {
   choice_ambiguous: "The list has more than one choice with that value in this language. Change them in the UI.",
   choice_in_use:
-    "Records hold this value. Prefer set_choice with inactive, which keeps its label and hides it from new selections. " +
+    "Records hold this value. Prefer inactivating the choice, which keeps its label and hides it from new selections. " +
     "Removing it anyway leaves those records with a value that has no choice; ask the user first.",
   choice_list_inherited:
     "The column is defined on a parent table (named) and this table has no choice list of its own, so it shows the " +
@@ -199,7 +200,14 @@ function detailLine(detail: object | undefined): string[] {
   return parts.length ? [`Detail: ${parts.join("; ")}`] : [];
 }
 
-export function metadataErrorText(action: string, error: unknown) {
+/** What kind of call failed, for the hints: a read, a list-layout call (which also names a view), a column removal. */
+interface ErrorContext {
+  read?: boolean;
+  listLayout?: boolean;
+  columnRemoval?: boolean;
+}
+
+export function metadataErrorText(action: string, error: unknown, context: ErrorContext = {}) {
   const lines: string[] = [];
   if (error instanceof ToolInputError) {
     lines.push(`Error (${action}): ${error.message}`);
@@ -210,11 +218,11 @@ export function metadataErrorText(action: string, error: unknown) {
     const detail = (error.detail ?? {}) as Record<string, unknown>;
     if (error.code === "invalid_input" && (detail.updateSetState !== undefined || detail.updateSetApplication !== undefined)) {
       lines.push(UPDATE_SET_REFUSED);
-    } else if (error.code === "invalid_input" && !error.detail && action.endsWith("list_layout")) {
+    } else if (error.code === "invalid_input" && !error.detail && context.listLayout) {
       lines.push("The view or the update set may not exist: check the view on sys_ui_view and the set with list_update_sets.");
-    } else if (error.code === "invalid_input" && !error.detail && !action.startsWith("get_")) {
+    } else if (error.code === "invalid_input" && !error.detail && !context.read) {
       lines.push("A value was refused, or the update set may not exist: check the names given and the set with list_update_sets.");
-    } else if (error.code === "delete_not_supported" && action === "remove_table_column") {
+    } else if (error.code === "delete_not_supported" && context.columnRemoval) {
       lines.push("The table's Delete Column action is not the platform's standard one (it may be customised): remove the column in the UI.");
     } else if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
   } else if (error instanceof MetadataVerificationError) {
@@ -230,7 +238,7 @@ export function metadataErrorText(action: string, error: unknown) {
     }
   } else {
     lines.push(`Error (${action}): ${cleanMessage(error instanceof Error ? error.message : String(error))}`);
-    if (!action.startsWith("get_")) {
+    if (!context.read) {
       lines.push("The change may have been applied before this failed: read the record back before retrying.");
     }
   }
@@ -523,7 +531,7 @@ export function registerRemoveTableColumnTool(server: McpServer): void {
           ...result.messages.map((m) => `Instance said: ${cleanMessage(m)}`),
         ]);
       } catch (error) {
-        return metadataErrorText("remove_table_column", error);
+        return metadataErrorText("remove_table_column", error, { columnRemoval: true });
       }
     }
   );
@@ -537,7 +545,7 @@ const choiceParams = {
   instance: instanceParam,
   table: z.string().regex(IDENT).describe("The table."),
   column: z.string().regex(IDENT).describe("The column, prefix included (u_ in Global)."),
-  language: z.string().regex(/^[a-z][a-z_]{1,9}$/i).optional().describe("Choice language (sys_choice.language, e.g. en, pb); en when omitted."),
+  language: z.string().regex(/^[a-z][a-z_]{1,9}$/).optional().describe("Choice language (sys_choice.language, e.g. en, pb); en when omitted."),
 };
 const choiceValue = z
   .string()
@@ -570,7 +578,7 @@ export function registerGetChoiceListTool(server: McpServer): void {
           ...(list.choices.length > 500 ? [`... (${list.choices.length - 500} more choices)`] : []),
         ]);
       } catch (error) {
-        return metadataErrorText("get_choice_list", error);
+        return metadataErrorText("get_choice_list", error, { read: true });
       }
     }
   );
@@ -702,7 +710,7 @@ export function registerGetFormLayoutTool(server: McpServer): void {
             : `Elements (${layout.elements.length}): ${layout.elements.map(clean).join(", ")}`,
         ]);
       } catch (error) {
-        return metadataErrorText("get_form_layout", error);
+        return metadataErrorText("get_form_layout", error, { read: true });
       }
     }
   );
@@ -779,7 +787,7 @@ export function registerGetListLayoutTool(server: McpServer): void {
             : `Columns (${layout.columns.length}): ${layout.columns.map(clean).join(", ")}`,
         ]);
       } catch (error) {
-        return metadataErrorText("get_list_layout", error);
+        return metadataErrorText("get_list_layout", error, { read: true, listLayout: true });
       }
     }
   );
@@ -828,7 +836,7 @@ export function registerSetListLayoutTool(server: McpServer): void {
           ...captureLines(result.capture),
         ]);
       } catch (error) {
-        return metadataErrorText("set_list_layout", error);
+        return metadataErrorText("set_list_layout", error, { listLayout: true });
       }
     }
   );
