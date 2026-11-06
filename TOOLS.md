@@ -1366,6 +1366,7 @@ Create a new update set on the ServiceNow instance.
   "arguments": {
     "instance": "myinstance",
     "name": "FEAT-1234 New Catalog Item",
+    "application": "global",
     "description": "Update set for the new hardware catalog item"
   }
 }
@@ -1375,9 +1376,13 @@ Create a new update set on the ServiceNow instance.
 
 ```
 Update set created successfully.
-sys_id: new123def456789
+
+sys_id: 3cc9f203531c9f90b6d61901a0490ed4
 Name: FEAT-1234 New Catalog Item
 State: in progress
+Application: global
+
+Make it the working set with set_current_update_set before changing anything.
 ```
 
 ---

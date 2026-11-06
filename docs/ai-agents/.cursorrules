@@ -120,10 +120,14 @@ Always run `query_update_records` and `query_delete_records` with `confirm: fals
 |------|-------------|----------------|
 | `get_current_update_set` | Get active update set | |
 | `list_update_sets` | List update sets | `query`, `limit` |
-| `create_update_set` | Create new | `name`, `description` |
-| `set_current_update_set` | Set as active | `name`, `sys_id` |
+| `create_update_set` | Create in an application (duplicate-checked) | `name`, `application`, `description` |
+| `set_current_update_set` | Make it the working set; reports the previous one | `sys_id` |
+| `restore_update_set` | Put the previous working set back | `application`, `update_set` |
+| `complete_update_set` | Complete after checking the count | `sys_id`, `expected_captures` |
+| `move_update_set_capture` | Verified single-capture move | `capture`, `source_set`, `target_set`, `reason` |
+| `export_update_set` | XML file (never returned) | `sys_id`, `output` |
 | `inspect_update_set` | Inspect components | `sys_id` |
-| `clone_update_set` | Clone with records | `source_sys_id`, `new_name` |
+| `clone_update_set` | Clone (lossy; not for backup or promotion) | `source_sys_id`, `new_name` |
 | `move_update_set_records` | Move records | `target_update_set_id`, `source_update_set` |
 
 ### App & Store
@@ -213,7 +217,7 @@ pull_script → edit locally → push_script → execute_script (test)
 
 ### Deployment
 ```
-create_update_set → set_current_update_set → make changes → inspect_update_set → clone_update_set (backup)
+create_update_set → set_current_update_set → make changes → inspect_update_set → complete_update_set → restore_update_set → export_update_set
 ```
 
 ### Task Lifecycle

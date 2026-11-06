@@ -493,6 +493,7 @@ describe('New Tools Integration Tests', () => {
         arguments: {
           instance: SN_INSTANCE,
           name: `Integration Test Move Source ${Date.now()}`,
+          application: 'global',
           description: 'Integration test - source for move operation',
         },
       })
@@ -502,6 +503,7 @@ describe('New Tools Integration Tests', () => {
         arguments: {
           instance: SN_INSTANCE,
           name: `Integration Test Move Target ${Date.now()}`,
+          application: 'global',
           description: 'Integration test - target for move operation',
         },
       })
@@ -509,10 +511,9 @@ describe('New Tools Integration Tests', () => {
       const sourceId = getText(us1Result).match(/sys_id:\s*([a-f0-9]{32})/)?.[1]
       const targetId = getText(us2Result).match(/sys_id:\s*([a-f0-9]{32})/)?.[1]
 
-      if (!sourceId || !targetId) {
-        console.error('Could not create update sets for move test')
-        return
-      }
+      // A set that was not created is a failure, not a reason to skip the test.
+      expect(sourceId).toBeDefined()
+      expect(targetId).toBeDefined()
 
       // Try to move records (source is empty, but the operation should succeed)
       const result = await client.callTool({

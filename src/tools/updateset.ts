@@ -197,7 +197,8 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
       annotations: annotationsFor("create_update_set"),
       title: "Create Update Set",
       description:
-        "Create a new update set. IMPORTANT: This creates a new update set on the instance.",
+        "Create a new update set, In progress, in the given application. It is not made current: use " +
+        "set_current_update_set for that. IMPORTANT: This creates a new update set on the instance.",
       inputSchema: {
         instance: z
           .string()
@@ -220,10 +221,10 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           .string()
           .regex(/^[^\p{Cc}]*$/u, "no control characters")
           .optional()
-          .describe("Optional description for the update set."),
+          .describe("Optional single-line description for the update set."),
         application: z
           .string()
-          .regex(/^(global|[0-9a-f]{32}|[a-z0-9_]{1,40})$/i, "global, a sys_scope sys_id, or a scope name such as x_acme_app")
+          .regex(/^(global|[0-9a-f]{32}|[a-z0-9_]{1,40})$/, "global, a lowercase sys_scope sys_id, or a scope name such as x_acme_app")
           .describe(
             "The application the set belongs to: global, a sys_scope sys_id, or a scope name that matches exactly one " +
               "active application (not a display name). Create the set in the application you are changing; the set is checked " +
@@ -245,7 +246,8 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           `sys_id: ${result.sys_id}`,
           `Name: ${String(result.name ?? "").replace(/\p{Cc}/gu, " ")}`,
           `State: ${String(result.state ?? "").replace(/\p{Cc}/gu, " ")}`,
-          `Application: ${application}`,
+          `Application: ${String(result.application ?? application).replace(/\p{Cc}/gu, " ")}` +
+            (result.application && result.application !== application ? ` (${application})` : ""),
           ``,
           "Make it the working set with set_current_update_set before changing anything.",
         ];
