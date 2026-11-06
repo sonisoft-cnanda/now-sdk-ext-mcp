@@ -19,6 +19,20 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import {
+  registerAddTableColumnTool,
+  registerDeleteMetadataRecordTool,
+  registerGetChoiceListTool,
+  registerGetFormLayoutTool,
+  registerGetListLayoutTool,
+  registerInsertMetadataRecordTool,
+  registerRemoveChoiceTool,
+  registerRemoveTableColumnTool,
+  registerSetChoiceTool,
+  registerSetFormLayoutTool,
+  registerSetListLayoutTool,
+  registerUpdateMetadataRecordTool,
+} from "../tools/metadata.js";
+import {
   registerAddAclRoleTool,
   registerCreateAclTool,
   registerDeleteAclTool,
@@ -180,6 +194,19 @@ import {
 export type ToolRegistrar = (server: McpServer) => void;
 
 export const TOOL_REGISTRY: Record<string, ToolRegistrar> = {
+  // ---- application metadata (forms, columns, choices, layouts)
+  add_table_column: registerAddTableColumnTool,
+  delete_metadata_record: registerDeleteMetadataRecordTool,
+  get_choice_list: registerGetChoiceListTool,
+  get_form_layout: registerGetFormLayoutTool,
+  get_list_layout: registerGetListLayoutTool,
+  insert_metadata_record: registerInsertMetadataRecordTool,
+  remove_choice: registerRemoveChoiceTool,
+  remove_table_column: registerRemoveTableColumnTool,
+  set_choice: registerSetChoiceTool,
+  set_form_layout: registerSetFormLayoutTool,
+  set_list_layout: registerSetListLayoutTool,
+  update_metadata_record: registerUpdateMetadataRecordTool,
   // ---- access controls and role elevation
   add_acl_role: registerAddAclRoleTool,
   create_acl: registerCreateAclTool,

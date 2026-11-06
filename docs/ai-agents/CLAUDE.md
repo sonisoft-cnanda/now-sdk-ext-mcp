@@ -96,6 +96,12 @@ All tools at a glance:
 | `inspect_update_set` | Inspect update set contents grouped by type |
 | `clone_update_set` | Clone an update set (lossy: drops application, action, table; not for promotion) |
 | `move_update_set_records` | Move records between update sets (unverified; prefer `move_update_set_capture`) |
+| **Application Metadata** | |
+| `insert_metadata_record` / `update_metadata_record` / `delete_metadata_record` | Write metadata through its form in a named application and set; verified |
+| `add_table_column` / `remove_table_column` | Add or remove a column (working set required to add) |
+| `get_choice_list` / `set_choice` / `remove_choice` | Read and change a column's choices |
+| `get_form_layout` / `set_form_layout` | Read and replace a form section's layout |
+| `get_list_layout` / `set_list_layout` | Read and replace a list's columns |
 | **Access Controls** | |
 | `list_acls` | List ACLs of a table, name or application, with their roles |
 | `get_acl` | Read one ACL: roles, condition, script |
@@ -396,6 +402,15 @@ Update sets track configuration changes for migration between instances:
 - Use `inspect_update_set` to review what was captured, then `complete_update_set` with that count
 - Put the user's working set back with `restore_update_set`
 - Ship a Complete set with `export_update_set`; do not use `clone_update_set` for backups or promotion (it drops columns)
+
+### Application Metadata
+
+- Prefer the metadata tools to `execute_script`, `batch_*` or `push_script` for script includes, business rules, UI
+  actions, properties, columns, choices and layouts. They write through the record's form in the application and update set
+  you name, and verify the capture. Scripts and the Table API capture into the user's current set, often the wrong one.
+- Column adds and layout saves need the update set to be the working set: `set_current_update_set` first, then
+  `restore_update_set` afterwards.
+- Read before replacing a layout (`get_form_layout`, `get_list_layout`): the save takes the whole new list.
 
 ### Access Controls (ACLs)
 
@@ -941,6 +956,22 @@ query_update_records(table: "incident", query: "active=true^priority=5", data: {
 
 ---
 
+### Application Metadata
+
+| Tool | Key Parameters | Description |
+|------|---------------|-------------|
+| `insert_metadata_record` | `table`, `fields`, `scope`/`scope_id`, `update_set` | Insert through the form; verified with its capture |
+| `update_metadata_record` | `table`, `sys_id`, `fields`, target | Change fields |
+| `delete_metadata_record` | `table`, `sys_id`, `confirm_table`, `confirm_sys_id`, target | Delete (platform Delete) |
+| `add_table_column` / `remove_table_column` | `table`, `column`, `label`, `type` / `confirm` | Column add needs the working set |
+| `get_choice_list` / `set_choice` / `remove_choice` | `table`, `column`, `value` | Choice lists |
+| `get_form_layout` / `set_form_layout` | `section`, `elements` | Whole-section replace; needs the working set |
+| `get_list_layout` / `set_list_layout` | `table`, `view`, `columns` | Whole-list replace; needs the working set |
+
+Code (scripts, server conditions, Jelly, `javascript:`) also needs `execute`.
+
+---
+
 ### Access Controls
 
 | Tool | Key Parameters | Description |
@@ -1354,6 +1385,9 @@ Step 4: Test with execute_script
 | Bulk update safely | `query_update_records` | `table`, `query`, `data`, `confirm` |
 | Bulk delete safely | `query_delete_records` | `table`, `query`, `confirm` |
 | Create update set | `create_update_set` | `name`, `application` |
+| Add or change a script include, rule or property | `insert_metadata_record` / `update_metadata_record` | `table`, `fields`, `scope`, `update_set` |
+| Add a column | `add_table_column` | `table`, `column`, `label`, `type`, `scope`, `update_set` |
+| Change a form or list layout | `set_current_update_set`, then `get_form_layout` → `set_form_layout` / `get_list_layout` → `set_list_layout` | `section` / `table` |
 | See who an ACL lets in | `list_acls` / `get_acl` | `table` or `sys_id` |
 | Change an ACL (security change) | `create_acl` / `update_acl` / `add_acl_role` | `scope`, `update_set` |
 | Check role elevation | `get_role_elevation` | `elevate: true` |

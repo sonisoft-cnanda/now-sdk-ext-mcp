@@ -1533,6 +1533,234 @@ Total Records: 5
 
 ---
 
+## Application metadata
+
+These tools write metadata the way `nex metadata` does: through the platform's forms, in a named application and update set, reading back each record and its capture. They refuse protected files, the platform's own schema tables, and access controls (use the ACL tools for those). Adding a column and saving a layout need the update set to be the working set (`set_current_update_set`). Writes are never replayed after a connection error.
+
+Writing code needs `execute` as well as `write`, and `NEX_POLICY_DENY=execute` refuses it. Code means a script column, a server condition, Jelly or a `javascript:` value, or switching on a record that holds code; core checks this on each call. Other metadata stays a plain write.
+
+---
+
+## insert_metadata_record
+
+Insert application metadata such as a script include, business rule, UI action or property. Writes through the record's form in the named application and update set, then reads back the record and its capture.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` / `scope_id` | string | One of them | — | The record's application: scope name or `"global"`, or its sys_scope sys_id. |
+| `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
+| `table` | string | **Yes** | — | The metadata table, e.g. `sys_script_include`. |
+| `fields` | object | One of these | — | Field values by column: text, numbers, booleans, null, lists of text, or a duration `{days, hours, minutes, seconds}`. |
+| `variables` | object | One of these | — | Variable values by element name. |
+| `variable_field` | string | No | — | The variables column, when there are several. |
+| `initial_query` | string | One of these | — | Equality terms the new form starts from, e.g. `collection=incident^type=1`. |
+| `view` | string | No | default | The form view. |
+
+---
+
+## update_metadata_record
+
+Change fields of application metadata. Writes through the record's form in the named application and update set, then reads back the record and its capture.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` / `scope_id` | string | One of them | — | The record's application: scope name or `"global"`, or its sys_scope sys_id. |
+| `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
+| `table` | string | **Yes** | — | The metadata table. |
+| `sys_id` | string | **Yes** | — | The record. |
+| `fields` / `variables` | object | One of them | — | As for insert. |
+| `view` | string | No | default | The form view. |
+
+---
+
+## delete_metadata_record
+
+Delete application metadata through the platform's own Delete, captured as a DELETE and read back.
+
+> **Warning:** Committing the set deletes the record wherever it is committed. Only when the user asked.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` / `scope_id` | string | One of them | — | The record's application: scope name or `"global"`, or its sys_scope sys_id. |
+| `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
+| `table` / `sys_id` | string | **Yes** | — | The record. |
+| `confirm_table` / `confirm_sys_id` | string | **Yes** | — | Repeat both exactly. |
+
+---
+
+## add_table_column
+
+Add a column to a table, as the Columns related list does. The Field Label and the form layout it joins are captured and verified. The platform's prefix (`u_` in Global, `<scope>_` on another application's table) is added when missing.
+
+> **Warning:** The update set must be the working set: the platform captures schema changes only into the current set.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` / `scope_id` | string | One of them | — | The record's application: scope name or `"global"`, or its sys_scope sys_id. |
+| `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
+| `table` | string | **Yes** | — | The table. |
+| `column` | string | **Yes** | — | The column name, lower case. |
+| `label` | string | **Yes** | — | The label (plain text, at most 80 characters). |
+| `type` | string | No | `string` | A sys_glide_object name: `string`, `integer`, `boolean`, `glide_date_time`, `reference`, `glide_list`, ... |
+| `max_length` | integer | No | type default | For string types. |
+| `reference` | string | For `reference` | — | The referenced table. |
+
+---
+
+## remove_table_column
+
+Remove a column, capturing every DELETE (dictionary, labels, and anything the platform deletes with it) and verifying each. It is refused while rows hold values, or while client scripts or UI policy actions name the column, unless that was acknowledged.
+
+> **Warning:** This deletes the column's data here, and wherever the set is committed.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` / `scope_id` | string | One of them | — | The record's application: scope name or `"global"`, or its sys_scope sys_id. |
+| `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
+| `table` / `column` | string | **Yes** | — | The column, prefix included. |
+| `confirm` | string | **Yes** | — | `<table>.<column>` exactly. |
+| `acknowledge_data_loss` | boolean | No | — | The user agreed the column's values are deleted with it. |
+| `acknowledge_dependent_deletes` | boolean | No | — | The user agreed the dependent client scripts and UI policy actions are deleted too. |
+
+---
+
+## get_choice_list
+
+Read a column's choice list in one language. The result names the list's application, which is the one to write the list in.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `table` / `column` | string | **Yes** | — | The column. |
+| `language` | string | No | `en` | Choice language. |
+
+---
+
+## set_choice
+
+Add a choice, or change one's label, sequence, hint or inactive flag. The list's capture is verified in the named set. Inactivating keeps the label and hides the choice from new selections.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` / `scope_id` | string | One of them | — | The record's application: scope name or `"global"`, or its sys_scope sys_id. |
+| `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
+| `table` / `column` | string | **Yes** | — | The column. |
+| `value` | string | **Yes** | — | The stored value (no `^` or `javascript:`). |
+| `label` | string | To add | — | The label. |
+| `sequence` / `inactive` / `hint` / `language` | | No | — | As named. |
+
+---
+
+## remove_choice
+
+Remove a choice. It is refused while records hold the value; prefer `set_choice` with `inactive`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` / `scope_id` | string | One of them | — | The record's application: scope name or `"global"`, or its sys_scope sys_id. |
+| `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
+| `table` / `column` / `value` | string | **Yes** | — | The choice. |
+| `confirm_in_use` | boolean | No | — | The user agreed to remove it although records hold the value. |
+| `language` | string | No | `en` | |
+
+---
+
+## get_form_layout
+
+Read one form section's layout in order: field names, `.begin_split`, `.split`, `.end_split`, and `.formatter.<sys_id>`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `section` | string | **Yes** | — | The `sys_ui_section` sys_id (query `sys_ui_section` by `name` and `view`). |
+
+---
+
+## set_form_layout
+
+Replace one form section's layout with the whole new element list, as the Form Layout page saves it. The result reports the previous layout so it can be restored.
+
+> **Warning:** The update set must be the working set. Sections holding annotations, charts or embedded lists are refused.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` / `scope_id` | string | One of them | — | The record's application: scope name or `"global"`, or its sys_scope sys_id. |
+| `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
+| `section` | string | **Yes** | — | The `sys_ui_section` sys_id. |
+| `elements` | string[] | **Yes** | — | The whole new layout, in order, as `get_form_layout` returns it (dot-walked fields allowed). Each field or formatter at most once; split markers may repeat. |
+
+---
+
+## get_list_layout
+
+Read a table's list columns for a view, in order. Dot-walked columns appear as `field.field`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `table` | string | **Yes** | — | The table. |
+| `view` | string | No | Default | The view. |
+
+---
+
+## set_list_layout
+
+Replace a table's list columns for a view with the whole new list, as the List Layout page saves it. The result reports the previous columns.
+
+> **Warning:** The update set must be the working set.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` / `scope_id` | string | One of them | — | The record's application: scope name or `"global"`, or its sys_scope sys_id. |
+| `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
+| `table` | string | **Yes** | — | The table. |
+| `view` | string | No | Default | The view. |
+| `columns` | string[] | **Yes** | — | The whole new column list; dot-walked as `field.field`; each column at most once. |
+
+---
+
 ## list_acls
 
 List access controls (`sys_security_acl`) with their roles. Needs at least one of `table`, `name`, `scope` or `scope_id`. `table` returns the table's own ACLs (`table`, `table.*`, `table.<field>`), not its parent tables'.
@@ -2717,6 +2945,8 @@ Message: Script pulled successfully
 ## push_script
 
 Push a local script file to a ServiceNow instance, updating the script field on the matching record. The file is read from the specified path and the record is found by name in the appropriate table.
+
+> **Note:** A pushed script runs on the instance, so pushing needs `execute` as well as `write`. `NEX_POLICY_DENY=execute` refuses it.
 
 > **Warning:** This modifies code on the ServiceNow instance. The record must already exist — this updates an existing script, it does not create new ones.
 

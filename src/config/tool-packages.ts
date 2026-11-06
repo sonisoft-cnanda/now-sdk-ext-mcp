@@ -33,6 +33,22 @@ export interface ToolPackage {
     tools: string[];
 }
 
+/** Application metadata through the platform's forms: records, columns, choices, form and list layouts. */
+const METADATA_TOOLS = [
+    "insert_metadata_record",
+    "update_metadata_record",
+    "delete_metadata_record",
+    "add_table_column",
+    "remove_table_column",
+    "get_choice_list",
+    "set_choice",
+    "remove_choice",
+    "get_form_layout",
+    "set_form_layout",
+    "get_list_layout",
+    "set_list_layout",
+];
+
 /** Every ACL and role-elevation tool: reading ACLs, and changing them into an application's update set. */
 const ACL_TOOLS = [
     "list_acls",
@@ -104,6 +120,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "export_record_xml",
             "import_records_xml",
             ...ACL_TOOLS,
+            ...METADATA_TOOLS,
         ],
     },
 
