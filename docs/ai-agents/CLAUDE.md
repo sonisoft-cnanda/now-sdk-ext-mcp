@@ -96,6 +96,12 @@ All tools at a glance:
 | `inspect_update_set` | Inspect update set contents grouped by type |
 | `clone_update_set` | Clone an update set (lossy: drops application, action, table; not for promotion) |
 | `move_update_set_records` | Move records between update sets (unverified; prefer `move_update_set_capture`) |
+| **Application Metadata** | |
+| `insert_metadata_record` / `update_metadata_record` / `delete_metadata_record` | Write metadata through its form in a named application and set; verified |
+| `add_table_column` / `remove_table_column` | Add or remove a column (working set required to add) |
+| `get_choice_list` / `set_choice` / `remove_choice` | Read and change a column's choices |
+| `get_form_layout` / `set_form_layout` | Read and replace a form section's layout |
+| `get_list_layout` / `set_list_layout` | Read and replace a list's columns |
 | **Access Controls** | |
 | `list_acls` | List ACLs of a table, name or application, with their roles |
 | `get_acl` | Read one ACL: roles, condition, script |
@@ -396,6 +402,15 @@ Update sets track configuration changes for migration between instances:
 - Use `inspect_update_set` to review what was captured, then `complete_update_set` with that count
 - Put the user's working set back with `restore_update_set`
 - Ship a Complete set with `export_update_set`; do not use `clone_update_set` for backups or promotion (it drops columns)
+
+### Application Metadata
+
+- Prefer the metadata tools to `execute_script`, `batch_*` or `push_script` for script includes, business rules, UI
+  actions, properties, columns, choices and layouts. They write through the record's form in the application and update set
+  you name, and verify the capture. Scripts and the Table API capture into the user's current set, often the wrong one.
+- Column adds and layout saves need the update set to be the working set: `set_current_update_set` first, then
+  `restore_update_set` afterwards.
+- Read before replacing a layout (`get_form_layout`, `get_list_layout`): the save takes the whole new list.
 
 ### Access Controls (ACLs)
 

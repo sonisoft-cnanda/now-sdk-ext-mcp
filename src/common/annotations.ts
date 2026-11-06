@@ -227,6 +227,25 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     close_incident: SET,
     approve_change: SET,
 
+    // ---- application metadata, through the platform's forms; every write is read back with its
+    // capture. Inserting adds; updating and the layout saves overwrite what was there (a repeat
+    // settles); deletes and removals lose data and a repeat is refused.
+    get_choice_list: READ,
+    get_form_layout: READ,
+    get_list_layout: READ,
+    insert_metadata_record: CREATE,
+    update_metadata_record: OVERWRITE,
+    delete_metadata_record: OVERWRITE_ONCE,
+    // Adding a column adds; a repeat is refused (column_exists).
+    add_table_column: { ...CREATE },
+    // Deletes the column's data with it.
+    remove_table_column: OVERWRITE_ONCE,
+    // Adds a choice or changes one; a repeat with the same values is refused as unchanged (settles).
+    set_choice: OVERWRITE,
+    remove_choice: OVERWRITE_ONCE,
+    set_form_layout: OVERWRITE,
+    set_list_layout: OVERWRITE,
+
     // ---- access controls. Reads change nothing. Elevating a session (get_role_elevation, or
     // elevate on a read) changes no instance data, so it is a read: a deliberate decision, so a
     // read-only session can still read what only security_admin may see (README: Role elevation).
