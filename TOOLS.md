@@ -1535,7 +1535,9 @@ Total Records: 5
 
 ## Application metadata
 
-These tools write metadata the way `nex metadata` does: through the platform's forms, in a named application and update set, reading back each record and its capture. They refuse protected files, the platform's own schema tables, and access controls (use the ACL tools for those). Column and layout changes need the update set to be the working set (`set_current_update_set`). Writes are never replayed after a connection error.
+These tools write metadata the way `nex metadata` does: through the platform's forms, in a named application and update set, reading back each record and its capture. They refuse protected files, the platform's own schema tables, and access controls (use the ACL tools for those). Adding a column and saving a layout need the update set to be the working set (`set_current_update_set`). Writes are never replayed after a connection error.
+
+Writing code needs `execute` as well as `write`, and `NEX_POLICY_DENY=execute` refuses it. Code means a script column, a server condition, Jelly or a `javascript:` value, or switching on a record that holds code; core checks this on each call. Other metadata stays a plain write.
 
 ---
 
@@ -1721,7 +1723,7 @@ Replace one form section's layout with the whole new element list, as the Form L
 | `update_set` | string | **Yes** | — | An In progress update set of that application; the capture is verified there. |
 | `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
 | `section` | string | **Yes** | — | The `sys_ui_section` sys_id. |
-| `elements` | string[] | **Yes** | — | The whole new layout, in order. |
+| `elements` | string[] | **Yes** | — | The whole new layout, in order, as `get_form_layout` returns it (dot-walked fields allowed). Each field or formatter at most once; split markers may repeat. |
 
 ---
 
@@ -1755,7 +1757,7 @@ Replace a table's list columns for a view with the whole new list, as the List L
 | `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip the file. |
 | `table` | string | **Yes** | — | The table. |
 | `view` | string | No | Default | The view. |
-| `columns` | string[] | **Yes** | — | The whole new column list; dot-walked as `field.field`. |
+| `columns` | string[] | **Yes** | — | The whole new column list; dot-walked as `field.field`; each column at most once. |
 
 ---
 
@@ -2943,6 +2945,8 @@ Message: Script pulled successfully
 ## push_script
 
 Push a local script file to a ServiceNow instance, updating the script field on the matching record. The file is read from the specified path and the record is found by name in the appropriate table.
+
+> **Note:** A pushed script runs on the instance, so pushing needs `execute` as well as `write`. `NEX_POLICY_DENY=execute` refuses it.
 
 > **Warning:** This modifies code on the ServiceNow instance. The record must already exist — this updates an existing script, it does not create new ones.
 

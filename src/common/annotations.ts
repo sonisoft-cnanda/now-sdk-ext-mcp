@@ -216,7 +216,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // instance.
     pull_script: LOCAL_WRITE,
     // Overwrites the script record on the instance.
-    push_script: OVERWRITE,
+    // A pushed script runs on the instance: core requires execute as well as write (core 6.18.7).
+    push_script: { ...OVERWRITE, verbs: ["execute", "write"] },
 
     // ---- tasks: field updates and appends
     find_task: READ,
@@ -229,7 +230,9 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
 
     // ---- application metadata, through the platform's forms; every write is read back with its
     // capture. Inserting adds; updating and the layout saves overwrite what was there (a repeat
-    // settles); deletes and removals lose data and a repeat is refused.
+    // settles); deletes and removals lose data and a repeat is refused. Code (a script, a server
+    // condition, Jelly, a javascript: value, or switching such a record on) also needs execute:
+    // core's MetadataFormWriter checks that per call (core 6.18.7), so these stay plain writes.
     get_choice_list: READ,
     get_form_layout: READ,
     get_list_layout: READ,
@@ -237,7 +240,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     update_metadata_record: OVERWRITE,
     delete_metadata_record: OVERWRITE_ONCE,
     // Adding a column adds; a repeat is refused (column_exists).
-    add_table_column: { ...CREATE },
+    add_table_column: CREATE,
     // Deletes the column's data with it.
     remove_table_column: OVERWRITE_ONCE,
     // Adds a choice or changes one; a repeat with the same values is refused as unchanged (settles).

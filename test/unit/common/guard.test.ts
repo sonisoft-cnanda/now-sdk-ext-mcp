@@ -21,14 +21,15 @@ describe("requirement derivation", () => {
         expect(requirementFor("query_table").verbs).toEqual([]);
     });
 
-    it.each(["create_kb_article", "update_kb_article", "query_delete_records", "push_script"])(
+    it.each(["create_kb_article", "update_kb_article", "query_delete_records"])(
         "treats %s as a write",
         (tool) => {
             expect(requirementFor(tool).verbs).toEqual(["write"]);
         },
     );
 
-    it.each(["execute_script", "execute_flow", "test_flow"])(
+    // push_script: a pushed script runs on the instance (core requires execute too).
+    it.each(["execute_script", "execute_flow", "test_flow", "push_script"])(
         "treats %s as execute AND write",
         (tool) => {
             // Previously underivable: ARBITRARY was the same object as OVERWRITE_ONCE,

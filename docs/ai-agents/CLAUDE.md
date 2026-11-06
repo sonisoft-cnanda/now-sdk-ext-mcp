@@ -956,6 +956,22 @@ query_update_records(table: "incident", query: "active=true^priority=5", data: {
 
 ---
 
+### Application Metadata
+
+| Tool | Key Parameters | Description |
+|------|---------------|-------------|
+| `insert_metadata_record` | `table`, `fields`, `scope`/`scope_id`, `update_set` | Insert through the form; verified with its capture |
+| `update_metadata_record` | `table`, `sys_id`, `fields`, target | Change fields |
+| `delete_metadata_record` | `table`, `sys_id`, `confirm_table`, `confirm_sys_id`, target | Delete (platform Delete) |
+| `add_table_column` / `remove_table_column` | `table`, `column`, `label`, `type` / `confirm` | Column add needs the working set |
+| `get_choice_list` / `set_choice` / `remove_choice` | `table`, `column`, `value` | Choice lists |
+| `get_form_layout` / `set_form_layout` | `section`, `elements` | Whole-section replace |
+| `get_list_layout` / `set_list_layout` | `table`, `view`, `columns` | Whole-list replace |
+
+Code (scripts, server conditions, Jelly, `javascript:`) also needs `execute`.
+
+---
+
 ### Access Controls
 
 | Tool | Key Parameters | Description |
@@ -1369,6 +1385,9 @@ Step 4: Test with execute_script
 | Bulk update safely | `query_update_records` | `table`, `query`, `data`, `confirm` |
 | Bulk delete safely | `query_delete_records` | `table`, `query`, `confirm` |
 | Create update set | `create_update_set` | `name`, `application` |
+| Add or change a script include, rule or property | `insert_metadata_record` / `update_metadata_record` | `table`, `fields`, `scope`, `update_set` |
+| Add a column | `add_table_column` | `table`, `column`, `label`, `type`, `scope`, `update_set` |
+| Change a form or list layout | `get_form_layout` → `set_form_layout` / `get_list_layout` → `set_list_layout` | `section` / `table` |
 | See who an ACL lets in | `list_acls` / `get_acl` | `table` or `sys_id` |
 | Change an ACL (security change) | `create_acl` / `update_acl` / `add_acl_role` | `scope`, `update_set` |
 | Check role elevation | `get_role_elevation` | `elevate: true` |

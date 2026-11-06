@@ -36,7 +36,10 @@ const NO_CONTROL = /^[^\p{Cc}]*$/u;
 // Values come from the instance: one line each, no control characters (markup stripped from free text).
 const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
 const cleanMessage = (text: string): string =>
-  redactMessage(text).replace(/<[^>]*>/g, "[omitted]").replace(/<[^>]*$/, "[omitted]").replace(/\p{Cc}/gu, " ");
+  redactMessage(text).replace(/<[^>]*>/g, "[omitted]").replace(/<[^>]*$/, "[omitted]").replace(/\p{Cc}/gu, " ").slice(0, 500);
+/** Instance lists are shown in full up to a bound, then counted. */
+const bounded = (items: string[], max = 200): string =>
+  items.length > max ? `${items.slice(0, max).join(", ")}, ... (${items.length - max} more)` : items.join(", ");
 
 function text(lines: string[]) {
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
@@ -55,7 +58,7 @@ const targetParams = {
     .regex(SYS_ID)
     .describe(
       "sys_id of an In progress update set of that application (create_update_set). The capture is verified there; " +
-        "for columns and layouts it must also be the working set (set_current_update_set)."
+        "for adding a column and for layout saves it must also be the working set (set_current_update_set)."
     ),
   acknowledge_upgrade_skip: z
     .boolean()
@@ -134,11 +137,11 @@ const REMEDIATION: Record<string, string> = {
     "The table, or a table it extends, already has a column of that name. Choose another name (the name includes the platform's prefix).",
   column_has_data:
     "Rows hold a value in this column (counted); removing it deletes those values here and wherever the DELETE is " +
-    "committed. Ask the user before acknowledging the data loss.",
+    "committed. Stop and ask the user whether those values may be lost.",
   column_has_dependents:
     "The platform will also delete the onChange client scripts and UI policy actions that name this column (counted), " +
-    "each captured as a DELETE. Read them first (sys_script_client and sys_ui_policy_action for the table and field) and " +
-    "ask the user before acknowledging those deletes.",
+    "each captured as a DELETE. Read them first (sys_script_client and sys_ui_policy_action for the table and field), then " +
+    "stop and ask the user whether they may be deleted.",
   column_not_deletable:
     "The platform does not allow this column to be deleted: only a u_ column, or a scoped application's own column, can be. " +
     "A vendor column cannot be removed.",
@@ -170,7 +173,25 @@ const REMEDIATION: Record<string, string> = {
   update_set_not_current: "Make the update set the working set first with set_current_update_set, and restore the previous one afterwards.",
   update_set_required: "Name an In progress update set of the record's application (create_update_set).",
   invalid_input: "A value failed validation (named in the detail): check its format and limits.",
+  scope_unknown: "No active application has that scope: check it with list_scoped_apps.",
+  scope_ambiguous: "More than one application has that scope name: name it by its sys_scope sys_id instead.",
+  scope_required: "Name the record's application.",
+  scope_not_applied: "The form did not load in the requested application, so nothing was posted. Check the record's application.",
+  delete_not_supported: "The platform offers no standard Delete for this record's form, so it cannot be deleted this way; delete it in the UI.",
+  not_permitted: "The form offers no update action to this user: the record is read-only to them.",
+  csrf_token_unavailable: "The form returned no security token; nothing was posted. Retry once.",
+  evidence_unavailable: "The instance did not return complete evidence; nothing was concluded. Retry the read.",
 };
+
+const VERIFICATION_REMEDIATION: Record<string, string> = {
+  captured_elsewhere: "The capture landed in another update set: move it with move_update_set_capture, then check the set.",
+  mixed_scope_capture: "The set holds captures of another application: move them to their own set with move_update_set_capture.",
+  session_changed: "The user's working set changed during the write (another session?): check get_current_update_set before anything else.",
+};
+
+/** The update set itself was refused: not In progress, or another application's. */
+const UPDATE_SET_REFUSED =
+  "The update set is not In progress, or belongs to another application (detail). Use an In progress set of the record's application.";
 
 /** Identifiers and counts only; capped, so a large detail object cannot flood the result. */
 function detailLine(detail: object | undefined): string[] {
@@ -189,12 +210,16 @@ export function metadataErrorText(action: string, error: unknown) {
     lines.push(`Error (${action}): refused by policy: ${cleanMessage((error as Error).message)}`);
   } else if (error instanceof MetadataScopeError) {
     lines.push(`Error (${action}): ${error.code}`, ...detailLine(error.detail));
-    if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
+    const detail = (error.detail ?? {}) as Record<string, unknown>;
+    if (error.code === "invalid_input" && (detail.updateSetState !== undefined || detail.updateSetApplication !== undefined)) {
+      lines.push(UPDATE_SET_REFUSED);
+    } else if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
   } else if (error instanceof MetadataVerificationError) {
     lines.push(`Error (${action}): ${error.code}: the write could not be verified${error.writeAttempted ? " (it was attempted)" : ""}.`);
     if (error.sysId) lines.push(`Record: ${clean(error.table)} ${clean(error.sysId)}`);
     for (const message of error.messages) lines.push(`Instance said: ${cleanMessage(message)}`);
     lines.push(...captureLines(error.capture as CaptureReport | undefined));
+    if (VERIFICATION_REMEDIATION[error.code]) lines.push(VERIFICATION_REMEDIATION[error.code]);
     if (error.writeAttempted) {
       lines.push("The record can exist after a failed verification: read the record and its capture before retrying or cleaning up.");
     }
@@ -225,7 +250,12 @@ const writeParams = {
   variable_field: z.string().regex(IDENT).optional().describe("The variables column, when the table has more than one."),
   initial_query: z
     .string()
-    .regex(/^[a-z0-9_]+=[^^=\p{Cc}]*(\^[a-z0-9_]+=[^^=\p{Cc}]*)*$/u, "literal equality terms field=value joined by ^")
+    .regex(/^(?!sys_)[a-z0-9_]+=[^^=\p{Cc}]*(\^(?!sys_)[a-z0-9_]+=[^^=\p{Cc}]*)*$/u, "literal equality terms field=value joined by ^")
+    .refine((q) => !/javascript:/i.test(q), "no javascript:")
+    .refine((q) => {
+      const keys = q.split("^").map((t) => t.slice(0, t.indexOf("=")));
+      return new Set(keys).size === keys.length;
+    }, "each column at most once")
     .optional()
     .describe("Insert only: equality terms the new form starts from (sysparm_query), e.g. collection=incident^type=1."),
 };
@@ -529,7 +559,8 @@ export function registerGetChoiceListTool(server: McpServer): void {
           list.choiceSet
             ? `List application: ${clean(list.choiceSet.scope)} (capture ${clean(list.choiceSet.updateName)})`
             : `No list of its own on this table; the column's application is ${clean(list.column.scope)}.`,
-          ...list.choices.map(choiceLine),
+          ...list.choices.slice(0, 500).map(choiceLine),
+          ...(list.choices.length > 500 ? [`... (${list.choices.length - 500} more choices)`] : []),
         ]);
       } catch (error) {
         return metadataErrorText("get_choice_list", error);
@@ -633,7 +664,9 @@ export function registerRemoveChoiceTool(server: McpServer): void {
   );
 }
 
-const ELEMENT = /^([a-z0-9_]{1,80}|\.begin_split|\.split|\.end_split|\.formatter\.[0-9a-f]{32})$/;
+// Core's grammar: a field (dot-walked allowed, as get_form_layout returns them), a split marker, or a formatter.
+const ELEMENT = /^([a-z0-9_]{1,80}(\.[a-z0-9_]{1,80}){0,9}|\.begin_split|\.split|\.end_split|\.formatter\.[0-9a-f]{32})$/;
+const SPLITS = new Set([".begin_split", ".split", ".end_split"]);
 
 export function registerGetFormLayoutTool(server: McpServer): void {
   server.registerTool(
@@ -652,7 +685,7 @@ export function registerGetFormLayoutTool(server: McpServer): void {
         return text([
           `Form section ${clean(layout.section)}: ${clean(layout.table)}, view ${clean(layout.view) || "Default"}, caption ${clean(layout.caption) || "(main)"}`,
           `Application: ${clean(layout.scope)}`,
-          `Elements (${layout.elements.length}): ${layout.elements.map(clean).join(", ")}`,
+          `Elements (${layout.elements.length}): ${bounded(layout.elements.map(clean))}`,
         ]);
       } catch (error) {
         return metadataErrorText("get_form_layout", error);
@@ -675,10 +708,14 @@ export function registerSetFormLayoutTool(server: McpServer): void {
         instance: instanceParam,
         section: z.string().regex(SYS_ID).describe("The sys_ui_section sys_id."),
         elements: z
-          .array(z.string().regex(ELEMENT, "a field name, .begin_split, .split, .end_split or .formatter.<sys_id>"))
+          .array(z.string().regex(ELEMENT, "a field name (dot-walked allowed), .begin_split, .split, .end_split or .formatter.<sys_id>"))
           .min(1)
           .max(500)
-          .describe("The whole new layout, in order."),
+          .refine((list) => {
+            const named = list.filter((e) => !SPLITS.has(e));
+            return new Set(named).size === named.length;
+          }, "each field or formatter at most once")
+          .describe("The whole new layout, in order, as get_form_layout returns it."),
         ...targetParams,
       },
     },
@@ -722,7 +759,7 @@ export function registerGetListLayoutTool(server: McpServer): void {
         return text([
           `List ${clean(layout.table)}, view ${clean(layout.view) || "Default"}: ${layout.exists ? "its own list" : "no list of its own (the parent's or the default applies)"}`,
           ...(layout.sysId ? [`List record: ${clean(layout.sysId)}; application ${clean(layout.scope)}`] : []),
-          `Columns (${layout.columns.length}): ${layout.columns.map(clean).join(", ")}`,
+          `Columns (${layout.columns.length}): ${bounded(layout.columns.map(clean))}`,
         ]);
       } catch (error) {
         return metadataErrorText("get_list_layout", error);
@@ -745,9 +782,10 @@ export function registerSetListLayoutTool(server: McpServer): void {
         table: z.string().regex(IDENT).describe("The table."),
         view: z.string().regex(IDENT).optional().describe("The view; the Default view when omitted."),
         columns: z
-          .array(z.string().regex(/^[a-z0-9_]{1,80}(\.[a-z0-9_]{1,80}){0,3}$/, "a field name, dot-walked as field.field"))
+          .array(z.string().regex(/^[a-z0-9_]{1,80}(\.[a-z0-9_]{1,80}){0,9}$/, "a field name, dot-walked as field.field"))
           .min(1)
           .max(200)
+          .refine((list) => new Set(list).size === list.length, "each column at most once")
           .describe("The whole new column list, in order."),
         ...targetParams,
       },

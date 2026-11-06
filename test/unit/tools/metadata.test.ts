@@ -12,8 +12,9 @@ const choices = { getChoices: jest.fn<(...a: any[]) => Promise<any>>(), setChoic
 const formLayout = { getFormLayout: jest.fn<(...a: any[]) => Promise<any>>(), setFormLayout: jest.fn<(...a: any[]) => Promise<any>>() }
 const listLayout = { getListLayout: jest.fn<(...a: any[]) => Promise<any>>(), setListLayout: jest.fn<(...a: any[]) => Promise<any>>() }
 class MetadataScopeError extends Error { constructor(public code: string, public detail?: any) { super(code) } }
+// Same argument order as core's: code, table, sysId, capture, messages, writeAttempted.
 class MetadataVerificationError extends Error {
-  constructor(public code: string, public table: string, public sysId: string, public messages: string[], public writeAttempted: boolean, public capture?: any) { super(code) }
+  constructor(public code: string, public table: string, public sysId: string, public capture: any, public messages: string[], public writeAttempted: boolean) { super(code) }
 }
 class PolicyRefusal extends Error {}
 
@@ -88,6 +89,9 @@ describe('records', () => {
       ['insert_metadata_record', { table: 'sys_script_include', ...T, fields: { 'name.x': 'x' } }],
       ['insert_metadata_record', { table: 'sys_script_include', ...T, fields: { timeout: {} } }],
       ['insert_metadata_record', { table: 'sys_script_include', ...T, initial_query: 'name=x^ORname=y^javascript:1' }],
+      ['insert_metadata_record', { table: 'sys_script_include', ...T, initial_query: 'name=javascript:gs.log(1)' }],
+      ['insert_metadata_record', { table: 'sys_script_include', ...T, initial_query: 'sys_scope=global' }],
+      ['insert_metadata_record', { table: 'sys_script_include', ...T, initial_query: 'name=a^name=b' }],
       ['update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T }],
       ['delete_metadata_record', { table: 'sys_script_include', sys_id: REC, confirm_table: 'sys_script', confirm_sys_id: REC, ...T }],
     ]
@@ -121,11 +125,17 @@ describe('records', () => {
     form.update.mockRejectedValue(new MetadataScopeError('elevation_required', { table: 'sys_security_acl' }))
     r = await call('update_metadata_record', { table: 'sys_security_acl', sys_id: REC, ...T, fields: { active: false } })
     expect(r.text).toContain('ACL tools')
-    form.update.mockRejectedValue(new MetadataVerificationError('not_captured', 'sys_script_include', REC, ['secret-abc failed'], true))
+    form.update.mockRejectedValue(new MetadataVerificationError('not_captured', 'sys_script_include', REC, undefined, ['secret-abc failed'], true))
     r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })
     expect(r.text).toContain('not_captured: the write could not be verified (it was attempted)')
     expect(r.text).toContain('Instance said: [redacted] failed')
     expect(r.text).toContain('read the record and its capture before retrying')
+    form.update.mockRejectedValue(new MetadataScopeError('invalid_input', { updateSetState: 'complete', updateSetApplication: SCOPE_ID }))
+    r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })
+    expect(r.text).toContain('The update set is not In progress, or belongs to another application')
+    form.update.mockRejectedValue(new MetadataVerificationError('captured_elsewhere', 'sys_script_include', REC, undefined, [], true))
+    r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })
+    expect(r.text).toContain('move_update_set_capture')
     form.update.mockRejectedValue(new PolicyRefusal('Refused: changing instance data'))
     r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })
     expect(r.text).toContain('refused by policy')
@@ -157,7 +167,8 @@ describe('columns', () => {
     columns.removeColumn.mockRejectedValue(new MetadataScopeError('column_has_data', { records: 3 }))
     const refused = await call('remove_table_column', { table: 't', column: 'u_x', confirm: 't.u_x', ...T })
     expect(refused.text).toContain('Detail: records: 3')
-    expect(refused.text).toContain('Ask the user before acknowledging the data loss')
+    expect(refused.text).toContain('Stop and ask the user whether those values may be lost')
+    expect(refused.text).not.toContain('acknowledg')
   })
 })
 
@@ -197,6 +208,18 @@ describe('layouts', () => {
     expect(formLayout.setFormLayout).toHaveBeenCalledWith(SECTION, { scope: 'global', updateSet: SET, elements: ['number', 'state'] })
     expect(r.text).toContain('Before (to restore): number, .split, state')
     expect((await call('set_form_layout', { section: SECTION, elements: ['<b>'], scope: 'global', update_set: SET })).isError).toBe(true)
+    // A field twice is refused; split markers may repeat.
+    expect((await call('set_form_layout', { section: SECTION, elements: ['number', 'number'], scope: 'global', update_set: SET })).isError).toBe(true)
+  })
+
+  it('saves back a layout holding dot-walked fields as get_form_layout returned it', async () => {
+    formLayout.getFormLayout.mockResolvedValue({ section: SECTION, table: 'incident', view: '', caption: '', scope: 'global', elements: ['number', '.split', 'caller_id.email', '.split'] })
+    const read = await call('get_form_layout', { section: SECTION })
+    const elements = read.text.split('): ')[1].split(', ')
+    formLayout.setFormLayout.mockResolvedValue({ section: SECTION, table: 'incident', view: '', scope: { scope: 'global', sysId: 'global' },
+      elements, previousElements: elements, capture })
+    expect((await call('set_form_layout', { section: SECTION, elements, scope: 'global', update_set: SET })).isError).toBe(false)
+    expect(formLayout.setFormLayout).toHaveBeenCalledWith(SECTION, expect.objectContaining({ elements: ['number', '.split', 'caller_id.email', '.split'] }))
   })
 
   it('reads and replaces list columns, dot-walked allowed', async () => {
