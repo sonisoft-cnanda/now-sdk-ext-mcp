@@ -4038,9 +4038,9 @@ A verified browser session for an alias, as `nex auth browser-session` mints it,
 | Tool | Does |
 |------|------|
 | `create_browser_session` | Writes `<name>.json` (0600, never replacing a file) in the session directory and returns its path, the cookie count and the OAuth token's expiry. `name` is letters, digits, `-` and `_`; default the alias and a timestamp. The model never chooses a path. |
-| `delete_browser_session` | Deletes a `.json` file in the session directory, given the path `create_browser_session` returned. Local cleanup, so it is permitted under any policy. |
+| `delete_browser_session` | Deletes a session file, given the path `create_browser_session` returned: only a file in the session directory that is this user's own, 0600, and a Playwright storage state, so nothing else there can be removed. Local cleanup, so it is permitted under any policy. |
 
-The session directory is `NEX_BROWSER_SESSION_DIR` when the server sets it (absolute and existing, or every call is refused), otherwise a private per-user directory under the system temp directory, which must be this user's own and closed to others (0700).
+The session directory is `NEX_BROWSER_SESSION_DIR` when the server sets it, otherwise a private per-user directory under the system temp directory. Either must be this user's own and closed to others (0700), or every call is refused. Files are created with O_EXCL (never replacing a file or following a link), with no temporary copy. On Windows there is no owner or mode to check, and the per-user temp directory is what keeps the file private.
 
 ```js
 // Playwright, with the path create_browser_session returned

@@ -92,13 +92,15 @@ const LOCAL_WRITE: ToolAnnotations = { ...OVERWRITE, target: "local" };
 /**
  * Hands out a browser session with the user's full rights in the UI. Minting it changes no instance data, but
  * whatever drives the browser can then change anything, outside this server's policy. So it needs everything a
- * change would: write and execute, and NEX_POLICY_DENY of either refuses it. Adds a new file; repeating adds another.
+ * change would: write and execute, and NEX_POLICY_DENY of either refuses it. Marked destructive, as ARBITRARY is,
+ * because what it enables is unbounded. Adds a new file; repeating adds another.
  */
 const BROWSER_SESSION: ToolAnnotations = {
     verbs: ["write", "execute"],
     target: "instance",
     readOnlyHint: false,
-    destructiveHint: false,
+    // What it hands out is unbounded, as with ARBITRARY: a host must not auto-approve it.
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: true,
 };

@@ -88,7 +88,7 @@ Every tool that interacts with a ServiceNow instance should include an optional 
 | `NEX_LOG_DIR` | _(state dir)_ | Directory for log files. Implies `NEX_LOG_FILE`; an explicit `NEX_LOG_FILE=0` still wins |
 | `NEX_LOG_LEVEL` | `info` | `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`. Diagnostics always go to stderr, never stdout |
 | `NEX_EXPORT_DIR` | _(unset)_ | Absolute directory `export_update_set` must write inside (and may replace files in). Unset, exports only create new files. Always an absolute `.xml` path |
-| `NEX_BROWSER_SESSION_DIR` | _(unset)_ | Absolute directory for `create_browser_session` files. Unset: a private per-user dir under the temp dir (refused if not 0700 and ours) |
+| `NEX_BROWSER_SESSION_DIR` | _(unset)_ | Absolute directory for `create_browser_session` files; must be ours and 0700. Unset: a private per-user dir under the temp dir, same check |
 
 ## Credential Storage
 

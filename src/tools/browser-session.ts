@@ -1,8 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { randomBytes } from "node:crypto";
 import { constants } from "node:fs";
-import { access, link, lstat, mkdir, open, realpath, rm, stat, unlink } from "node:fs/promises";
+import { access, lstat, mkdir, open, readFile, realpath, stat, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import { SessionAuthError, createBrowserSession } from "@sonisoft/now-sdk-ext-core";
@@ -16,12 +15,15 @@ import { instanceParam } from "./working-set.js";
  * is a secret with the user's full rights in the UI, so:
  * - it is only ever written to an owner-only file (0600) in one directory this server controls, never returned;
  * - the file is named by the server, never chosen as a path by the model, and an existing file is never replaced;
- * - delete_browser_session removes it again, and only files in that directory.
- * The directory is NEX_BROWSER_SESSION_DIR when set (absolute and existing, or every call is refused), else a private
- * directory under the system temp dir that must be this user's own and closed to others.
+ * - delete_browser_session removes it again: only a file in that directory that is this user's own, 0600, and a
+ *   Playwright storage state, so it cannot remove anything else that happens to live there.
+ * The directory is NEX_BROWSER_SESSION_DIR when set, else a private directory under the system temp dir. Either must
+ * be this user's own and closed to others (on POSIX), or every call is refused. On Windows there is no owner or mode
+ * to check: the per-user temp directory is what keeps it private.
  */
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const MAX_STATE_BYTES = 1_000_000;
 
 class SessionFileError extends Error {
   constructor(readonly code: "session_dir_misconfigured" | "session_dir_unsafe" | "session_exists" | "not_a_session_file" | "session_write_failed") {
@@ -31,60 +33,77 @@ class SessionFileError extends Error {
 
 const FILE_ERRORS: Record<SessionFileError["code"], string> = {
   session_dir_misconfigured:
-    "The server's NEX_BROWSER_SESSION_DIR is not an absolute, existing, writable directory, so no session is written until the " +
-    "server's configuration is fixed.",
+    "The server's NEX_BROWSER_SESSION_DIR is not an absolute, existing, writable directory owned by this user and closed to " +
+    "others (0700), so no session is written until the server's configuration is fixed.",
   session_dir_unsafe:
     "The server's private session directory is not a directory owned by this user and closed to others, so no session is " +
     "written. Set NEX_BROWSER_SESSION_DIR in the server's environment, or remove the directory and let the server create it.",
   session_exists: "A session file with that name exists, and it is never replaced. Use another name, or delete the old one first.",
-  not_a_session_file: "That is not a session file in this server's session directory. Pass the path create_browser_session returned.",
+  not_a_session_file:
+    "That is not a session file this server wrote: it must be a 0600 Playwright storage state in this server's session " +
+    "directory. Pass the path create_browser_session returned.",
   session_write_failed: "The session file could not be written. Nothing was left behind.",
 };
 
-/** The directory sessions live in, resolved, checked on every call. */
+/** This user's own directory, closed to group and others. Not checkable on Windows (no uid). */
+const isPrivate = (info: { uid: number; mode: number }, uid: number | undefined): boolean =>
+  uid === undefined || (info.uid === uid && (info.mode & 0o077) === 0);
+
+/** The directory sessions live in, resolved (links included), checked on every call. */
 async function sessionDirectory(): Promise<string> {
+  const uid = process.getuid?.();
   const configured = process.env.NEX_BROWSER_SESSION_DIR;
   if (configured !== undefined) {
     // Set but empty or relative fails closed, like any other misconfiguration.
     const real = isAbsolute(configured) ? await realpath(configured).catch(() => undefined) : undefined;
-    if (!real || !(await stat(real).then((s) => s.isDirectory(), () => false)) || !(await access(real, constants.W_OK).then(() => true, () => false))) {
+    const info = real ? await stat(real).catch(() => undefined) : undefined;
+    if (!real || !info?.isDirectory() || !isPrivate(info, uid) || !(await access(real, constants.W_OK).then(() => true, () => false))) {
       throw new SessionFileError("session_dir_misconfigured");
     }
     return real;
   }
-  const uid = process.getuid?.();
   const directory = join(tmpdir(), `nex-browser-sessions-${uid ?? "user"}`);
   await mkdir(directory, { mode: 0o700 }).catch((error: NodeJS.ErrnoException) => {
     if (error?.code !== "EEXIST") throw new SessionFileError("session_dir_unsafe");
   });
   // In a shared temp dir, someone else could have made it first: it must be ours, a real directory, and closed.
   const info = await lstat(directory).catch(() => undefined);
-  if (!info || !info.isDirectory() || (uid !== undefined && (info.uid !== uid || (info.mode & 0o077) !== 0))) {
-    throw new SessionFileError("session_dir_unsafe");
-  }
-  return directory;
+  if (!info || !info.isDirectory() || !isPrivate(info, uid)) throw new SessionFileError("session_dir_unsafe");
+  // Resolved, so a temp dir reached through a link (macOS /var -> /private/var) compares equal on delete.
+  return realpath(directory);
 }
 
-/** Write the state to a new 0600 file without ever leaving a partial one or replacing one. */
+/**
+ * Write the state straight to a new 0600 file: O_EXCL never replaces a file and never follows a link, and there is
+ * no temporary copy to leave behind. A failed write removes what it created.
+ */
 async function writeSessionFile(directory: string, name: string, content: string): Promise<string> {
   const path = join(directory, `${name}.json`);
-  const temporary = join(directory, `.${name}.${randomBytes(6).toString("hex")}.tmp`);
+  let handle;
   try {
-    const handle = await open(temporary, "wx", 0o600);
-    try {
-      await handle.writeFile(content, "utf8");
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    // A hard link fails if the target exists, so an existing file is never replaced.
-    await link(temporary, path);
-    return path;
+    handle = await open(path, "wx", 0o600);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === "EEXIST") throw new SessionFileError("session_exists");
+    throw new SessionFileError((error as NodeJS.ErrnoException)?.code === "EEXIST" ? "session_exists" : "session_write_failed");
+  }
+  try {
+    await handle.writeFile(content, "utf8");
+    await handle.sync();
+    await handle.close();
+    return path;
+  } catch {
+    await handle.close().catch(() => undefined);
+    await unlink(path).catch(() => undefined);
     throw new SessionFileError("session_write_failed");
-  } finally {
-    await rm(temporary, { force: true }).catch(() => undefined);
+  }
+}
+
+/** A Playwright storage state as create_browser_session writes it. */
+function isStorageState(content: string): boolean {
+  try {
+    const state = JSON.parse(content) as { cookies?: unknown; origins?: unknown };
+    return Array.isArray(state?.cookies) && Array.isArray(state?.origins) && Object.keys(state).length === 2;
+  } catch {
+    return false;
   }
 }
 
@@ -118,7 +137,10 @@ export function registerCreateBrowserSessionTool(server: McpServer): void {
       try {
         // Checked before logging in, so a misconfigured directory costs no session.
         const directory = await sessionDirectory();
-        const fileName = name ?? `${alias.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 30)}-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const fromAlias = `${alias.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 30)}-${stamp}`;
+        // A default name must also be deletable: one that would not pass NAME (an alias starting with _, say) is not used.
+        const fileName = name ?? (NAME.test(fromAlias) ? fromAlias : `session-${stamp}`);
         const session = await createBrowserSession({ alias });
         const path = await writeSessionFile(directory, fileName, JSON.stringify(session.storageState));
         const cookies = session.storageState.cookies.length;
@@ -174,7 +196,12 @@ export function registerDeleteBrowserSessionTool(server: McpServer): void {
         const target = join(directory, basename(path));
         const info = await lstat(target).catch(() => undefined);
         if (!info) return { ...text([`Error (delete_browser_session): no session file at ${clean(target)}; nothing was deleted.`]), isError: true };
-        if (!info.isFile()) throw new SessionFileError("not_a_session_file");
+        // Only what create_browser_session writes: a regular file of ours, 0600, holding a storage state.
+        const uid = process.getuid?.();
+        if (!info.isFile() || info.size > MAX_STATE_BYTES || (uid !== undefined && (info.uid !== uid || (info.mode & 0o777) !== 0o600))) {
+          throw new SessionFileError("not_a_session_file");
+        }
+        if (!isStorageState(await readFile(target, "utf8"))) throw new SessionFileError("not_a_session_file");
         await unlink(target);
         return text([`Deleted the browser session file ${target}.`]);
       } catch (error) {

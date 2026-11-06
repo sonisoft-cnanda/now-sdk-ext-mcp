@@ -28,6 +28,7 @@ jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
 }))
 
 const tools = await import('../../../src/tools/browser-session.js')
+const { TOOL_ANNOTATIONS } = await import('../../../src/common/annotations.js')
 
 const COOKIE = 'glide_session_store=SECRETVALUE'
 const minted = () => ({ alias: 'dev', instanceUrl: 'https://dev.service-now.com', createdAt: 1, oauthExpiresAt: Date.UTC(2026, 10, 7) / 1000,
@@ -109,6 +110,43 @@ describe('create_browser_session', () => {
     expect(existsSync(join(dir, 'two.json'))).toBe(false)
   })
 
+  ;(asRoot ? it.skip : it)('resolves a temp directory reached through a link, so its files can be deleted', async () => {
+    delete process.env.NEX_BROWSER_SESSION_DIR
+    const real = join(root, 'real'); mkdirSync(real, { mode: 0o700 })
+    symlinkSync(real, join(root, 'via-link'))
+    fakeTmp = join(root, 'via-link')
+    const created = await call('create_browser_session', { instance: 'dev', name: 'linked' })
+    const path = /written to (\S+)/.exec(created.text)?.[1] as string
+    expect(path).toBe(join(real, `nex-browser-sessions-${process.getuid?.()}`, 'linked.json'))
+    expect((await call('delete_browser_session', { path })).isError).toBe(false)
+    expect(existsSync(path)).toBe(false)
+  })
+
+  ;(asRoot ? it.skip : it)('refuses a pre-made link in place of the private directory, and a configured directory open to others', async () => {
+    delete process.env.NEX_BROWSER_SESSION_DIR
+    fakeTmp = root
+    const elsewhere = join(root, 'elsewhere'); mkdirSync(elsewhere, { mode: 0o700 })
+    symlinkSync(elsewhere, join(root, `nex-browser-sessions-${process.getuid?.()}`))
+    expect((await call('create_browser_session', { instance: 'dev' })).text).toContain('session_dir_unsafe')
+    const open = join(root, 'open'); mkdirSync(open, { mode: 0o755 }); chmodSync(open, 0o755)
+    process.env.NEX_BROWSER_SESSION_DIR = open
+    expect((await call('create_browser_session', { instance: 'dev' })).text).toContain('session_dir_misconfigured')
+    expect(createBrowserSession).not.toHaveBeenCalled()
+  })
+
+  it('falls back to a deletable default name when the alias would not make one', async () => {
+    process.env.SN_AUTH_ALIAS = '_odd.alias'
+    const created = await call('create_browser_session', {})
+    const path = /written to (\S+)/.exec(created.text)?.[1] as string
+    expect(path).toMatch(/\/session-\d{4}-[\dT-]+Z\.json$/)
+    expect((await call('delete_browser_session', { path })).isError).toBe(false)
+  })
+
+  it('needs write and execute on the instance to create, and nothing to delete', () => {
+    expect(TOOL_ANNOTATIONS.create_browser_session).toMatchObject({ verbs: ['write', 'execute'], target: 'instance', destructiveHint: true })
+    expect(TOOL_ANNOTATIONS.delete_browser_session).toMatchObject({ target: 'local' })
+  })
+
   it('reports a login failure with its remediation, writing nothing', async () => {
     createBrowserSession.mockRejectedValueOnce(new SessionAuthError('NEX_AUTH_REAUTH_REQUIRED', 'Run nex auth open to sign in again.'))
     const r = await call('create_browser_session', { instance: 'dev' })
@@ -125,6 +163,15 @@ describe('delete_browser_session', () => {
     expect(r.text).toBe(`Deleted the browser session file ${join(root, 'gone.json')}.`)
     expect(readdirSync(root)).toEqual([])
     expect((await call('delete_browser_session', { path: join(root, 'gone.json') })).text).toContain('no session file')
+  })
+
+  it('deletes only its own storage-state files from the directory', async () => {
+    writeFileSync(join(root, 'package.json'), '{"name":"x"}', { mode: 0o600 })
+    writeFileSync(join(root, 'shared.json'), '{"cookies":[],"origins":[]}', { mode: 0o644 }); chmodSync(join(root, 'shared.json'), 0o644)
+    expect((await call('delete_browser_session', { path: join(root, 'package.json') })).text).toContain('not_a_session_file')
+    if (!asRoot) expect((await call('delete_browser_session', { path: join(root, 'shared.json') })).text).toContain('not_a_session_file')
+    expect(existsSync(join(root, 'package.json'))).toBe(true)
+    expect(existsSync(join(root, 'shared.json'))).toBe(true)
   })
 
   it('refuses anything outside the session directory, a non-json file, and a link', async () => {
