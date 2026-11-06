@@ -33,7 +33,7 @@ export interface ToolPackage {
     tools: string[];
 }
 
-/** Legacy workflows, read-only: find, read, outline, validate and plan the move to Flow Designer. */
+/** Legacy workflows: find, read, outline, validate and plan the move to Flow Designer. Only validate stores anything (its report). */
 const WORKFLOW_READ_TOOLS = [
     "list_workflows",
     "get_workflow",

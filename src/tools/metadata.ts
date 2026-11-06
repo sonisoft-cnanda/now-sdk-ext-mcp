@@ -33,9 +33,6 @@ const IDENT = /^[a-z0-9_]{1,80}$/;
 const SYS_ID = /^[0-9a-f]{32}$/;
 const NO_CONTROL = /^[^\p{Cc}]*$/u;
 
-
-// Markup is stripped before redaction, so a secret split by a tag (sec<b>ret</b>) is redacted whole.
-
 /** Where a write goes: the record's application and an In progress update set of it. */
 const targetParams = {
   scope: z

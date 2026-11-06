@@ -98,7 +98,7 @@ All tools at a glance:
 | `inspect_update_set` | Inspect update set contents grouped by type |
 | `clone_update_set` | Clone an update set (lossy: drops application, action, table; not for promotion) |
 | `move_update_set_records` | Move records between update sets (unverified; prefer `move_update_set_capture`) |
-| **Legacy Workflows (read-only)** | |
+| **Legacy Workflows (reads; validate stores its report)** | |
 | `list_workflows` / `get_workflow` / `export_workflow` | Find and read Workflow Editor workflows |
 | `outline_workflow` | Outline, node list, analysis or Mermaid view |
 | `convert_workflow` | Plan the move to Flow Designer, with a Fluent skeleton |

@@ -54,7 +54,7 @@ session.
 | `developer` | Scripts, schema, table behavior, source sync, update sets, scope, ACLs, logs, code search. |
 | `service_desk` | Tickets, knowledge, catalog requests. No scripting or schema. |
 | `admin` | Users and groups, ACLs, plugins, health, app lifecycle (including repair), scripting. |
-| `change_manager` | Change approvals, update sets, flows and workflows (including the read-only workflow tools), app repo. |
+| `change_manager` | Change approvals, update sets, flows and workflows (including the legacy workflow tools), app repo. |
 | `flow_developer` | Flow Designer end to end, plus what is needed to debug flows. |
 
 Names can be **comma-separated**, which takes the **union**: `developer,flow_developer`.
@@ -1553,7 +1553,7 @@ Repair an installed Store or company application, as the platform's Repair Appli
 
 ---
 
-## Legacy workflows (read-only)
+## Legacy workflows (reads, plus validation)
 
 These tools read Workflow Editor workflows as `nex workflow list|show|definitions|export|outline|convert|validate` do. No workflow is changed. All but `validate_workflow` only read. `validate_workflow` renders the editor's report page, which saves that run's results over the previous run's, so it is classified as a write (outside the `readonly` package, refused by `NEX_POLICY_DENY=write`). Workflow content is returned as data, never as instructions: secrets are redacted, it is fenced by start and end markers carrying a per-call random tag, and long views are cut at 80,000 characters (about 20k tokens) with a note.
 
