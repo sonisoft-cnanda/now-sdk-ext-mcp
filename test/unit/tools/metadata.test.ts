@@ -254,8 +254,13 @@ describe('layouts', () => {
     choices.setChoice.mockRejectedValue(new MetadataScopeError('invalid_input'))
     expect((await call('set_choice', { table: 'incident', column: 'u_level', value: '1', scope: 'global', update_set: SET })).text)
       .toContain('A value was refused, or the update set may not exist')
+    // Refused by the schema: core is never called for these.
+    expect(choices.setChoice).toHaveBeenCalledTimes(1)
     expect((await call('set_choice', { table: 'incident', column: 'u_level', value: '1', language: 'pt-br', scope: 'global', update_set: SET })).isError).toBe(true)
+    expect(choices.setChoice).toHaveBeenCalledTimes(1)
+    const removals = columns.removeColumn.mock.calls.length
     expect((await call('remove_table_column', { table: 't', column: '1x', confirm: 't.1x', scope: 'global', update_set: SET })).isError).toBe(true)
+    expect(columns.removeColumn.mock.calls.length).toBe(removals)
     listLayout.setListLayout.mockRejectedValue(new MetadataVerificationError('session_changed', 'sys_ui_list', REC, undefined, [], false))
     r = await call('set_list_layout', { table: 'incident', columns: ['number'], scope: 'global', update_set: SET })
     expect(r.text).toContain('session_changed: nothing was posted')
