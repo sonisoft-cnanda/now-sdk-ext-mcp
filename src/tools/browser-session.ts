@@ -86,6 +86,8 @@ async function writeSessionFile(directory: string, name: string, content: string
     throw new SessionFileError((error as NodeJS.ErrnoException)?.code === "EEXIST" ? "session_exists" : "session_write_failed");
   }
   try {
+    // The umask can narrow the mode (0400 under 0277); set it exactly, so delete recognises the file.
+    await handle.chmod(0o600);
     await handle.writeFile(content, "utf8");
     await handle.sync();
     await handle.close();

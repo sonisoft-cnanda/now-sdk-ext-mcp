@@ -170,8 +170,14 @@ describe('create_browser_session', () => {
 })
 
 describe('delete_browser_session', () => {
-  it('deletes a session file it wrote', async () => {
-    await call('create_browser_session', { instance: 'dev', name: 'gone' })
+  it('deletes a session file it wrote, even under a strict umask', async () => {
+    const before = process.umask(0o277)
+    try {
+      await call('create_browser_session', { instance: 'dev', name: 'gone' })
+    } finally {
+      process.umask(before)
+    }
+    expect(statSync(join(root, 'gone.json')).mode & 0o777).toBe(0o600)
     const r = await call('delete_browser_session', { path: join(root, 'gone.json') })
     expect(r.text).toBe(`Deleted the browser session file ${join(root, 'gone.json')}.`)
     expect(readdirSync(root)).toEqual([])
