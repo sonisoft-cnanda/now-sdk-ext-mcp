@@ -16,7 +16,11 @@ interface CacheEntry {
 /** Cache TTL — 30 minutes. ServiceNow sessions typically expire after idle time. */
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
-/** An elevated instance is rebuilt sooner: a shorter window in which a cached connection holds the role. */
+/**
+ * An elevated instance is rebuilt sooner: a shorter window in which this process holds an elevated connection.
+ * The evicted server session is not logged out; it stays elevated until the instance's idle timeout, but nothing
+ * here can reach it once its cookie is dropped.
+ */
 const ELEVATED_CACHE_TTL_MS = 10 * 60 * 1000;
 
 const instanceCache = new Map<string, CacheEntry>();

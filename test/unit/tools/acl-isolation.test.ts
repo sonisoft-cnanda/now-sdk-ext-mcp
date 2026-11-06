@@ -25,7 +25,7 @@ describe('elevation stays with the ACL tools', () => {
 
   it('no other tool passes connection options to withConnectionRetry', () => {
     // A third argument is how a tool asks for an elevated connection.
-    for (const file of files(join(SRC, 'tools')).filter(f => !f.endsWith('acl.ts'))) {
+    for (const file of files(join(SRC, 'tools')).filter(f => relative(SRC, f) !== join('tools', 'acl.ts'))) {
       const text = readFileSync(file, 'utf8')
       expect(text).not.toMatch(/ConnectionOptions/)
       expect(text).not.toMatch(/getServiceNowInstance\(/)

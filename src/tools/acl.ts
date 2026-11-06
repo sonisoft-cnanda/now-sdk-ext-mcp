@@ -66,11 +66,11 @@ const targetParams = {
     .optional()
     .describe(
       "Only for an installed Store application, and only after the user has reviewed it: upgrades " +
-        "of that application then skip this ACL until the customization is reviewed. Requires update_set."
+        "of that application then skip this ACL until the customization is reviewed."
     ),
 };
 
-/** The ACL's own fields, shared by create_acl and update_acl. */
+/** The ACL's own fields, shared by create_acl and update_acl; update_acl leaves an omitted field unchanged. */
 const fieldParams = {
   condition: z.string().optional().describe("Encoded query condition the record must meet."),
   script: z
@@ -80,11 +80,11 @@ const fieldParams = {
   admin_overrides: z
     .boolean()
     .optional()
-    .describe("Whether admin passes regardless (the form's Admin overrides). Default on create: true."),
+    .describe("Whether admin passes regardless (the form's Admin overrides). create_acl default: true; update_acl: omit to leave it."),
   decision_type: z
     .enum(["allow", "deny"])
     .optional()
-    .describe("allow (Allow-If, the default) or deny (Deny-Unless: checked first, grants nothing on its own)."),
+    .describe("allow (Allow-If; create_acl default) or deny (Deny-Unless: checked first, grants nothing on its own). update_acl: omit to leave it."),
   description: z.string().optional().describe("Description. The platform may write its own on first save."),
 };
 
@@ -368,7 +368,11 @@ export function registerCreateAclTool(server: McpServer): void {
         operation: z.string().regex(IDENT).describe("Operation name: read, write, create, delete, execute, ..."),
         type: z.string().regex(IDENT).optional().describe("sys_security_type name. Default record."),
         table: z.string().regex(IDENT).optional().describe("Record ACLs: the table."),
-        field: z.string().optional().describe("Record ACLs: the field, or * for every field. Omit for the table itself."),
+        field: z
+          .string()
+          .regex(/^(\*|[a-z0-9_]{1,80})$/i)
+          .optional()
+          .describe("Record ACLs: the field, or * for every field. Omit for the table itself."),
         name: z.string().optional().describe("Other types: the resource name (UI page, REST endpoint, script include, ...)."),
         roles: z
           .array(z.string().regex(ROLE))
