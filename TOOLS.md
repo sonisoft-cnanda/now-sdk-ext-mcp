@@ -1356,7 +1356,7 @@ Create a new update set on the ServiceNow instance.
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
 | `name` | string | **Yes** | — | Name of the update set to create. |
 | `description` | string | No | — | Optional description for the update set. |
-| `application` | string | **Yes** | — | `global`, a sys_scope sys_id, or a scope name matching exactly one active application. The set is checked for a duplicate name there and read back. |
+| `application` | string | **Yes** | — | `global`, a sys_scope sys_id, or a scope name matching exactly one active application. The set is checked for a duplicate name there and read back. Required since 5.0: before, it was optional and an omitted application took an unchecked path into the user's current application. |
 
 ### Example Usage
 
@@ -1423,6 +1423,8 @@ Put back the working set that `set_current_update_set` reported as previous. If 
 | `application` | string | **Yes** | — | `previous.application`: `global`, a sys_scope sys_id, or `""` when none was saved. |
 | `update_set` | string | **Yes** | — | `previous.updateSet`: a sys_id, or `""` when none was saved. |
 
+When `set_current_update_set` reported "none saved", restore with `{"application": "", "update_set": ""}`: the user goes back to the platform default (Global and its Default set).
+
 ---
 
 ## complete_update_set
@@ -1470,7 +1472,7 @@ Export an update set to an XML file on the machine running the server, as the pl
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
 | `sys_id` | string | **Yes** | — | A `sys_update_set` or `sys_remote_update_set` sys_id. |
 | `output` | string | **Yes** | — | Absolute path ending in `.xml`, inside `NEX_EXPORT_DIR` when the server sets it. |
-| `replace` | boolean | No | `false` | Replace an existing regular file, or a link (the link itself, never its target). |
+| `replace` | boolean | No | `false` | Replace an existing regular file, or a link (the link itself, never its target). Only when `NEX_EXPORT_DIR` is set: without it, an export can only create a new file. |
 | `include_incomplete` | boolean | No | `false` | Export a set that is not Complete, as a snapshot. |
 
 ### Example Output

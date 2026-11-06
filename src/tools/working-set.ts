@@ -112,16 +112,21 @@ const EXPORT_REMEDIATION: Record<string, string> = {
 
 class OutputError extends Error {
   /** afterExport: the instance side already ran (and cleaned up); only the local file is missing. */
-  constructor(public readonly code: "output_exists" | "output_invalid" | "output_write_failed" | "export_dir_misconfigured", public afterExport = false) {
+  constructor(
+    public readonly code: "output_exists" | "output_invalid" | "output_write_failed" | "export_dir_misconfigured" | "replace_needs_export_dir",
+    public afterExport = false,
+  ) {
     super(code);
   }
 }
 
 const OUTPUT_REMEDIATION: Record<string, string> = {
-  output_exists: "The output file exists. Choose another path, or replace it only if the user asked to.",
+  output_exists: "The output file exists. Choose another path, or replace it only if the user asked to (inside NEX_EXPORT_DIR).",
   output_invalid:
     "The path must be absolute and end in .xml, inside NEX_EXPORT_DIR when that is set, in an existing writable directory, " +
     "and (to replace) name a regular file. Choose another path.",
+  replace_needs_export_dir:
+    "Replacing a file is allowed only inside NEX_EXPORT_DIR, which this server does not set. Write a new file instead.",
   export_dir_misconfigured:
     "The server's NEX_EXPORT_DIR is not an absolute, existing directory, so no export path will be accepted until the " +
     "server configuration is fixed. Tell the user; do not try other paths.",
@@ -288,7 +293,11 @@ export function registerMoveUpdateSetCaptureTool(server: McpServer): void {
  */
 async function checkOutput(output: string, replace: boolean): Promise<string> {
   if (!isAbsolute(output) || /[/\\]$/.test(output) || extname(output).toLowerCase() !== ".xml") throw new OutputError("output_invalid");
-  const path = resolve(output);
+  // The directory is resolved once (links included) and the write goes through that resolved path, so a link swapped in
+  // afterwards cannot move the file out of NEX_EXPORT_DIR.
+  const directory = await realpath(dirname(resolve(output))).catch(() => undefined);
+  if (!directory || !(await stat(directory).then((s) => s.isDirectory(), () => false))) throw new OutputError("output_invalid");
+  const path = join(directory, basename(output));
   const root = process.env.NEX_EXPORT_DIR;
   // Set but empty (an unexpanded template variable, say) fails closed like any other misconfiguration.
   if (root !== undefined) {
@@ -298,12 +307,14 @@ async function checkOutput(output: string, replace: boolean): Promise<string> {
       log.warn("NEX_EXPORT_DIR is not an absolute, existing directory; refusing every export");
       throw new OutputError("export_dir_misconfigured");
     }
-    const within = relative(realRoot, await realpath(dirname(path)).catch(() => dirname(path)));
+    const within = relative(realRoot, directory);
     if (within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) throw new OutputError("output_invalid");
+  } else if (replace) {
+    // Without a confined directory, an export may only create a file: replacing one could overwrite any .xml the
+    // server user owns (a build's settings.xml, say) with instance-authored content.
+    throw new OutputError("replace_needs_export_dir");
   }
-  const parent = await stat(dirname(path)).catch(() => undefined);
-  if (!parent?.isDirectory()) throw new OutputError("output_invalid");
-  if (!(await access(dirname(path), constants.W_OK).then(() => true, () => false))) throw new OutputError("output_invalid");
+  if (!(await access(directory, constants.W_OK).then(() => true, () => false))) throw new OutputError("output_invalid");
   const existing = await lstat(path).catch(() => undefined);
   if (existing && !replace) throw new OutputError("output_exists");
   if (existing && !existing.isFile() && !existing.isSymbolicLink()) throw new OutputError("output_invalid");
@@ -364,7 +375,10 @@ export function registerExportUpdateSetTool(server: McpServer): void {
           .string()
           .min(1)
           .describe("Absolute path of the .xml file to write, e.g. /work/exports/my_set.xml (inside NEX_EXPORT_DIR when the server sets one)."),
-        replace: z.boolean().optional().describe("Replace the output file if it exists. Only when the user asked to."),
+        replace: z
+          .boolean()
+          .optional()
+          .describe("Replace the output file if it exists. Only when the user asked to, and only inside NEX_EXPORT_DIR."),
         include_incomplete: z
           .boolean()
           .optional()

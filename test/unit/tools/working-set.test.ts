@@ -215,19 +215,30 @@ describe('export_update_set', () => {
 
   it('treats a dangling link as existing, and replaces a link itself, never its target', async () => {
     exportUpdateSet.mockResolvedValue(result)
+    process.env.NEX_EXPORT_DIR = dir
     const target = join(dir, 'target.xml'); writeFileSync(target, 'target')
     const linked = join(dir, 'linked.xml'); symlinkSync(target, linked)
     const dangling = join(dir, 'dangling.xml'); symlinkSync(join(dir, 'nowhere.xml'), dangling)
     expect((await call('export_update_set', { sys_id: SET, output: dangling })).text).toContain('output_exists')
     expect(readlinkSync(dangling)).toBe(join(dir, 'nowhere.xml'))
-    await call('export_update_set', { sys_id: SET, output: linked, replace: true })
+    try { await call('export_update_set', { sys_id: SET, output: linked, replace: true }) } finally { delete process.env.NEX_EXPORT_DIR }
     expect(lstatSync(linked).isSymbolicLink()).toBe(false)
     expect(readFileSync(target, 'utf8')).toBe('target')
   })
 
+  it('refuses to replace a file unless NEX_EXPORT_DIR confines the export', async () => {
+    const output = join(dir, 'settings.xml'); writeFileSync(output, '<settings/>')
+    const { text } = await call('export_update_set', { sys_id: SET, output, replace: true })
+    expect(text).toContain('replace_needs_export_dir')
+    expect(readFileSync(output, 'utf8')).toBe('<settings/>')
+    expect(exportUpdateSet).not.toHaveBeenCalled()
+  })
+
   ;(asRoot ? it.skip : it)('refuses a directory in the way, or an unwritable directory, before copying anything', async () => {
     const asDir = join(dir, 'taken.xml'); mkdirSync(asDir)
-    expect((await call('export_update_set', { sys_id: SET, output: asDir, replace: true })).text).toContain('output_invalid')
+    process.env.NEX_EXPORT_DIR = dir
+    try { expect((await call('export_update_set', { sys_id: SET, output: asDir, replace: true })).text).toContain('output_invalid') }
+    finally { delete process.env.NEX_EXPORT_DIR }
     const locked = join(dir, 'locked'); mkdirSync(locked); chmodSync(locked, 0o500)
     try {
       expect((await call('export_update_set', { sys_id: SET, output: join(locked, 'x.xml') })).text).toContain('output_invalid')
@@ -269,7 +280,8 @@ describe('export_update_set', () => {
     exportUpdateSet.mockResolvedValue(result)
     const output = join(dir, 'set.xml')
     writeFileSync(output, 'old')
-    await call('export_update_set', { sys_id: SET, output, replace: true })
+    process.env.NEX_EXPORT_DIR = dir
+    try { await call('export_update_set', { sys_id: SET, output, replace: true }) } finally { delete process.env.NEX_EXPORT_DIR }
     expect(readFileSync(output, 'utf8')).toBe(result.xml)
     exportUpdateSet.mockRejectedValue(new UpdateSetExportError('update_set_incomplete', { state: 'in progress' }))
     const r = await call('export_update_set', { sys_id: SET, output: join(dir, 'b.xml') })
