@@ -368,6 +368,17 @@ control.
 > This is a guardrail, not a security boundary. Anything holding the credential can
 > reach the instance directly.
 
+### Role elevation (ACLs)
+
+Changing an access control needs the elevated `security_admin` role, the one the **Elevate Role**
+menu item turns on. Only the ACL write tools (`create_acl`, `update_acl`, `delete_acl`,
+`add_acl_role`, `remove_acl_role`) elevate. Elevation belongs to one server session, so they use a
+connection that elevates every session as it logs in. That connection is cached apart from the
+plain one, and no other tool ever runs elevated. Elevating changes no instance data, so
+`NEX_POLICY_DENY` and the `readonly` package still allow `get_role_elevation` and elevated reads,
+while the ACL writes are refused like any other write. In the base system only the `admin` user
+may elevate to `security_admin`.
+
 ## Contributing
 
 ### Testing

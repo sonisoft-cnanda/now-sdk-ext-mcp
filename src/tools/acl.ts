@@ -1,0 +1,537 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import {
+  AclError,
+  AclManager,
+  AclPartialError,
+  MetadataScopeError,
+  MetadataVerificationError,
+  RoleElevation,
+  RoleElevationError,
+  isPolicyRefusal,
+  redactMessage,
+  type AclRecord,
+  type AclWriteResult,
+  type AclWriteTarget,
+  type MetadataScopeRef,
+} from "@sonisoft/now-sdk-ext-core";
+import { withConnectionRetry, type ConnectionOptions } from "../common/connection.js";
+import { annotationsFor } from "../common/annotations.js";
+
+/**
+ * Access controls (sys_security_acl) and role elevation.
+ *
+ * Changing an ACL needs the elevated security_admin role. Elevation belongs to one server
+ * session, so the write tools run on an instance that elevates every session as it logs in,
+ * cached apart from the plain one: no other tool ever runs elevated. Reads need no elevation;
+ * `elevate: true` on a read only shows the role names hidden until then (security_admin).
+ */
+
+const SECURITY_ADMIN = ["security_admin"];
+const ELEVATED: ConnectionOptions = { elevatedRoles: SECURITY_ADMIN };
+
+const instanceParam = z
+  .string()
+  .optional()
+  .describe(
+    "The ServiceNow instance auth alias to connect to. " +
+      "This is the alias configured via `snc configure` (e.g., " +
+      '"myinstance", "prod", "test"). The user will typically refer to ' +
+      'this by name when saying things like "on my myinstance instance". ' +
+      "If not provided, falls back to the SN_AUTH_ALIAS environment variable."
+  );
+
+const sysIdParam = (what: string) => z.string().regex(/^[0-9a-f]{32}$/, "a 32-character sys_id").describe(what);
+
+/** Where a write goes: the ACL's application and an In progress update set of it. */
+const targetParams = {
+  scope: z
+    .string()
+    .optional()
+    .describe('The ACL\'s application: its scope name (e.g. "x_acme_app"), or "global". Give this or scope_id.'),
+  scope_id: z
+    .string()
+    .regex(/^[0-9a-f]{32}$/)
+    .optional()
+    .describe("The ACL's application by sys_scope sys_id, instead of scope."),
+  update_set: z
+    .string()
+    .regex(/^[0-9a-f]{32}$/)
+    .optional()
+    .describe(
+      "sys_id of an In progress update set of that application. Every write is captured there " +
+        "and verified; the user's own current update set is left as it is. Required for a Store application."
+    ),
+  acknowledge_upgrade_skip: z
+    .boolean()
+    .optional()
+    .describe(
+      "Only for an installed Store application, and only after the user has reviewed it: upgrades " +
+        "of that application then skip this ACL until the customization is reviewed. Requires update_set."
+    ),
+};
+
+/** The ACL's own fields, shared by create_acl and update_acl. */
+const fieldParams = {
+  condition: z.string().optional().describe("Encoded query condition the record must meet."),
+  script: z
+    .string()
+    .optional()
+    .describe("Script that sets `answer`. Also turns on advanced, so the form shows it (the platform runs it either way)."),
+  admin_overrides: z
+    .boolean()
+    .optional()
+    .describe("Whether admin passes regardless (the form's Admin overrides). Default on create: true."),
+  decision_type: z
+    .enum(["allow", "deny"])
+    .optional()
+    .describe("allow (Allow-If, the default) or deny (Deny-Unless: checked first, grants nothing on its own)."),
+  description: z.string().optional().describe("Description. The platform may write its own on first save."),
+};
+
+type TargetArgs = { scope?: string; scope_id?: string; update_set?: string; acknowledge_upgrade_skip?: boolean };
+
+class ToolInputError extends Error {}
+
+function scopeRef(scope: string | undefined, scopeId: string | undefined, required: boolean): MetadataScopeRef | undefined {
+  if (scope && scopeId) throw new ToolInputError("Give scope or scope_id, not both.");
+  if (scopeId) return { sysId: scopeId };
+  if (scope) return scope === "global" ? "global" : { scope };
+  if (required) throw new ToolInputError("Name the ACL's application: scope (a scope name or \"global\") or scope_id.");
+  return undefined;
+}
+
+function target(args: TargetArgs): AclWriteTarget {
+  if (args.acknowledge_upgrade_skip && !args.update_set) {
+    throw new ToolInputError("acknowledge_upgrade_skip needs update_set: a Store customization must be captured in a named set.");
+  }
+  return {
+    scope: scopeRef(args.scope, args.scope_id, true)!,
+    ...(args.update_set ? { updateSet: args.update_set } : {}),
+    ...(args.acknowledge_upgrade_skip ? { storeCustomization: { acknowledgeUpgradeSkip: true as const } } : {}),
+  };
+}
+
+// Values come from the instance: one line each, no control characters.
+const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
+const cleanMessage = (text: string): string => redactMessage(text).replace(/<[^>]*>/g, "[omitted]").replace(/\p{Cc}/gu, " ");
+
+/** A role the session may not read (security_admin until elevated; nobody and maint always) has no name. */
+const roleName = (role: { role: string; roleSysId: string }) => clean(role.role) || `${role.roleSysId} (hidden)`;
+
+function aclLines(acl: AclRecord): string[] {
+  const script = acl.script.trim();
+  return [
+    `ACL ${acl.sysId}: ${clean(acl.name)} (${clean(acl.type)}, ${clean(acl.operation)})${acl.active ? "" : " INACTIVE"}`,
+    `Scope: ${clean(acl.scopeName)} (${acl.scope})`,
+    `Roles: ${acl.roles.length ? acl.roles.map(roleName).join(", ") : "(none)"}`,
+    `Admin overrides: ${acl.adminOverrides ? "yes" : "no"}${acl.decisionType ? `; decision: ${clean(acl.decisionType)}` : ""}`,
+    `Condition: ${clean(acl.condition) || "(none)"}`,
+    `Script: ${script ? `${script.split("\n").length} line(s)${acl.advanced ? "" : " (advanced off: hidden on the form, still runs)"}` : "(none)"}`,
+    ...(acl.description ? [`Description: ${clean(acl.description)}`] : []),
+  ];
+}
+
+function text(lines: string[]) {
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+}
+
+function resultText(heading: string, result: AclWriteResult) {
+  const lines = [heading, ""];
+  if (result.acl) lines.push(...aclLines(result.acl), "");
+  if (result.removedAutomaticRoles.length) {
+    lines.push(`Removed the role the platform added on its own: ${result.removedAutomaticRoles.map(clean).join(", ")}`);
+  }
+  for (const warning of result.warnings) lines.push(`WARNING: ${clean(warning)}`);
+  lines.push(
+    "Verified writes:",
+    ...result.writes.map(
+      (w) => `- ${w.action} ${w.table} ${w.sysId} in update set ${clean(w.capture?.updateSetName)} (${w.capture?.updateSetSysId ?? "?"})`
+    )
+  );
+  // The whole result, for an agent that wants the before/after or the capture details.
+  lines.push("", "JSON:", JSON.stringify(result, null, 2));
+  return text(lines);
+}
+
+const REMEDIATION: Record<string, string> = {
+  acl_not_found: "Check the sys_id with list_acls.",
+  confirmation_required: "Pass confirm repeating the ACL's sys_id exactly.",
+  elevation_required: "The session is not elevated to security_admin. Check with get_role_elevation.",
+  field_not_found: "The table and the tables it extends have no such field.",
+  filter_required: "Pass at least one of table, name, scope or scope_id.",
+  invalid_input: "A value failed validation (the detail names it).",
+  operation_not_found: "No sys_security_operation has that name (read, write, create, delete, execute, ...).",
+  partially_applied: "The change stopped part way. Read the ACL with get_acl before anything else; do not retry blindly.",
+  role_already_present: "The ACL already has that role.",
+  role_not_found: "No role has that name.",
+  role_not_present: "The ACL does not have that role. Read its roles with get_acl.",
+  roles_not_applied: "The ACL's roles did not match those asked for, so it was left inactive. Read it with get_acl.",
+  scope_mismatch: "Pass the ACL's own application (get_acl names it).",
+  table_not_found: "No table has that name.",
+  type_not_found: "No sys_security_type has that name (record, ui_page, rest_endpoint, client_callable_script_include, ...).",
+  not_elevatable:
+    "The user may not elevate to that role (in the base system only the admin user has security_admin). " +
+    "Do not grant the role or switch credentials: report it to the user. get_role_elevation lists what is available.",
+  api_unavailable: 'The instance does not offer the elevate API: check that glide.rest.apis.disabled does not list "UI Impersonate API".',
+  not_applied: "The instance accepted the elevation but the session does not have the role. Compare by elevating in the UI.",
+};
+
+/** A failed ACL or elevation call, worded for the model: code, what happened, what to do. */
+export function aclErrorText(action: string, error: unknown) {
+  const lines: string[] = [];
+  if (error instanceof ToolInputError) {
+    lines.push(`Error (${action}): ${error.message}`);
+  } else if (error instanceof RoleElevationError) {
+    lines.push(`Error (${action}): role elevation failed: ${error.code}${error.roles.length ? ` (${error.roles.join(", ")})` : ""}`);
+    if (error.available.length) lines.push(`Roles this user may elevate to: ${error.available.join(", ")}`);
+    if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
+  } else if (isPolicyRefusal(error)) {
+    lines.push(`Error (${action}): refused by policy: ${cleanMessage((error as Error).message)}`);
+  } else if (error instanceof AclPartialError) {
+    lines.push(
+      `Error (${action}): partially_applied: the ${error.operation} of ACL ${error.aclSysId} stopped part way; ` +
+        `the ACL is ${error.state} (read back).`
+    );
+    lines.push(`Failed step: ${cleanMessage(error.cause instanceof Error ? error.cause.message : String(error.cause))}`);
+    lines.push(REMEDIATION.partially_applied);
+  } else if (error instanceof AclError) {
+    lines.push(`Error (${action}): ${error.code}${error.detail ? ` (${clean(error.detail)})` : ""}`);
+    if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
+  } else if (error instanceof MetadataVerificationError) {
+    lines.push(`Error (${action}): ${error.code}: the write could not be verified${error.writeAttempted ? " (it was attempted)" : ""}.`);
+    for (const message of error.messages) lines.push(`Instance said: ${cleanMessage(message)}`);
+    if (error.writeAttempted) lines.push("Read the ACL with get_acl before retrying.");
+  } else if (error instanceof MetadataScopeError) {
+    lines.push(`Error (${action}): ${error.code}${error.detail ? ` ${JSON.stringify(error.detail)}` : ""}`);
+    if (error.code === "store_scope") lines.push("An installed Store application: pass update_set and, only after the user's review, acknowledge_upgrade_skip.");
+    if (error.code === "update_set_required") lines.push("Pass update_set: an In progress update set of the ACL's application.");
+  } else {
+    lines.push(`Error (${action}): ${cleanMessage(error instanceof Error ? error.message : String(error))}`);
+  }
+  return { ...text(lines), isError: true };
+}
+
+const SECURITY_CHANGE =
+  "This is a security change: before calling it, tell the user who gains or loses access and get their go-ahead. " +
+  "It elevates its own session to security_admin (only for ACL tools; other tools stay unelevated) and writes " +
+  "into the named update set, verifying each write by reading it back.";
+
+export function registerListAclsTool(server: McpServer): void {
+  server.registerTool(
+    "list_acls",
+    {
+      annotations: annotationsFor("list_acls"),
+      title: "List ACLs",
+      description:
+        "List access controls (sys_security_acl) with their roles. Needs at least one of table, name, scope or scope_id. " +
+        "table returns the table's own ACLs: `table`, `table.*` and `table.<field>` (not the parent tables'; list those too). " +
+        "Roles on one ACL are alternatives; snc_internal among them lets every internal user pass.",
+      inputSchema: {
+        instance: instanceParam,
+        table: z.string().optional().describe("ACLs of this table: the table, table.* and table.<field>."),
+        name: z.string().optional().describe("Exact ACL name, e.g. incident.short_description or a UI page name."),
+        scope: z.string().optional().describe('Only this application\'s ACLs: a scope name, or "global".'),
+        scope_id: z.string().regex(/^[0-9a-f]{32}$/).optional().describe("Only this application's ACLs, by sys_scope sys_id."),
+        operation: z.string().optional().describe("Operation name: read, write, create, delete, execute, ..."),
+        type: z.string().optional().describe("ACL type: record, ui_page, rest_endpoint, client_callable_script_include, ..."),
+        active: z.boolean().optional().describe("Only active (true) or inactive (false) ACLs."),
+        elevate: z
+          .boolean()
+          .optional()
+          .describe("Read elevated to security_admin, so roles hidden until then show their names. Ask the user first."),
+      },
+    },
+    async ({ instance, table, name, scope, scope_id, operation, type, active, elevate }) => {
+      try {
+        const acls = await withConnectionRetry(
+          instance,
+          (sn) =>
+            new AclManager(sn).list({
+              ...(table !== undefined ? { table } : {}),
+              ...(name !== undefined ? { name } : {}),
+              ...(scope || scope_id ? { scope: scopeRef(scope, scope_id, false) } : {}),
+              ...(operation !== undefined ? { operation } : {}),
+              ...(type !== undefined ? { type } : {}),
+              ...(active !== undefined ? { active } : {}),
+            }),
+          elevate ? ELEVATED : undefined
+        );
+        const lines = [`${acls.length} ACL(s)`, ""];
+        for (const acl of acls) {
+          lines.push(
+            `${acl.sysId} ${acl.active ? "active" : "INACTIVE"} ${clean(acl.type)} ${clean(acl.operation)} ` +
+              `${clean(acl.name)} roles=[${acl.roles.map(roleName).join(", ")}]` +
+              `${acl.decisionType === "deny" ? " DENY-UNLESS" : ""}${acl.condition ? " +condition" : ""}` +
+              `${acl.script.trim() ? " +script" : ""} scope=${clean(acl.scopeName)}`
+          );
+        }
+        return text(lines);
+      } catch (error) {
+        return aclErrorText("list_acls", error);
+      }
+    }
+  );
+}
+
+export function registerGetAclTool(server: McpServer): void {
+  server.registerTool(
+    "get_acl",
+    {
+      annotations: annotationsFor("get_acl"),
+      title: "Get ACL",
+      description: "Read one access control with its roles, condition and script.",
+      inputSchema: {
+        instance: instanceParam,
+        sys_id: sysIdParam("The ACL's sys_id."),
+        elevate: z
+          .boolean()
+          .optional()
+          .describe("Read elevated to security_admin, so roles hidden until then show their names. Ask the user first."),
+      },
+    },
+    async ({ instance, sys_id, elevate }) => {
+      try {
+        const acl = await withConnectionRetry(instance, (sn) => new AclManager(sn).get(sys_id), elevate ? ELEVATED : undefined);
+        return text([...aclLines(acl), "", "JSON:", JSON.stringify(acl, null, 2)]);
+      } catch (error) {
+        return aclErrorText("get_acl", error);
+      }
+    }
+  );
+}
+
+export function registerGetRoleElevationTool(server: McpServer): void {
+  server.registerTool(
+    "get_role_elevation",
+    {
+      annotations: annotationsFor("get_role_elevation"),
+      title: "Get Role Elevation",
+      description:
+        "The elevated privilege roles (e.g. security_admin) this user may elevate to, as the Elevate Role dialog offers them. " +
+        "With elevate, also elevates a session to those roles and proves they hold. Elevating changes no instance data.",
+      inputSchema: {
+        instance: instanceParam,
+        elevate: z
+          .array(z.string().regex(/^[a-z][a-z0-9_.]{0,79}$/i))
+          .optional()
+          .describe('Roles to elevate to and prove, e.g. ["security_admin"].'),
+      },
+    },
+    async ({ instance, elevate }) => {
+      try {
+        const status = await withConnectionRetry(
+          instance,
+          (sn) => new RoleElevation(sn).status(),
+          elevate?.length ? { elevatedRoles: elevate } : undefined
+        );
+        const lines = status.available.length
+          ? [
+              "Roles this user may elevate to:",
+              ...status.available.map(
+                (r) => `- ${clean(r.name)}${status.elevated.includes(r.name) ? " (ELEVATED)" : ""}: ${clean(r.description)}`
+              ),
+            ]
+          : ["This user may not elevate to any role."];
+        lines.push(`Elevated in this session: ${status.elevated.length ? status.elevated.join(", ") : "(none)"}`);
+        return text(lines);
+      } catch (error) {
+        return aclErrorText("get_role_elevation", error);
+      }
+    }
+  );
+}
+
+export function registerCreateAclTool(server: McpServer): void {
+  server.registerTool(
+    "create_acl",
+    {
+      annotations: annotationsFor("create_acl"),
+      title: "Create ACL",
+      description:
+        "Create an access control. " + SECURITY_CHANGE + " " +
+        "With roles, the ACL is inserted inactive, given its roles, cleared of the snc_internal role the platform adds " +
+        "to a role-less ACL, checked, and only then activated. Without roles, snc_internal stays and every internal user " +
+        "who meets the condition or script passes. Put an ACL in its table's application: the platform's documented " +
+        "limits allow only role-based field ACLs on another application's table.",
+      inputSchema: {
+        instance: instanceParam,
+        ...targetParams,
+        operation: z.string().describe("Operation name: read, write, create, delete, execute, ..."),
+        type: z.string().optional().describe("sys_security_type name. Default record."),
+        table: z.string().optional().describe("Record ACLs: the table."),
+        field: z.string().optional().describe("Record ACLs: the field, or * for every field. Omit for the table itself."),
+        name: z.string().optional().describe("Other types: the resource name (UI page, REST endpoint, script include, ...)."),
+        roles: z.array(z.string()).optional().describe("Role names. Any one of them passes the ACL."),
+        active: z.boolean().optional().describe("Default true. false creates it inactive."),
+        ...fieldParams,
+      },
+    },
+    async (args) => {
+      try {
+        const result = await withConnectionRetry(
+          args.instance,
+          (sn) =>
+            new AclManager(sn).create({
+              ...target(args),
+              operation: args.operation,
+              ...(args.type !== undefined ? { type: args.type } : {}),
+              ...(args.table !== undefined ? { table: args.table } : {}),
+              ...(args.field !== undefined ? { field: args.field } : {}),
+              ...(args.name !== undefined ? { name: args.name } : {}),
+              ...(args.roles !== undefined ? { roles: args.roles } : {}),
+              ...(args.active !== undefined ? { active: args.active } : {}),
+              ...(args.condition !== undefined ? { condition: args.condition } : {}),
+              ...(args.script !== undefined ? { script: args.script } : {}),
+              ...(args.admin_overrides !== undefined ? { adminOverrides: args.admin_overrides } : {}),
+              ...(args.decision_type !== undefined ? { decisionType: args.decision_type } : {}),
+              ...(args.description !== undefined ? { description: args.description } : {}),
+            }),
+          ELEVATED
+        );
+        return resultText("ACL created.", result);
+      } catch (error) {
+        return aclErrorText("create_acl", error);
+      }
+    }
+  );
+}
+
+export function registerUpdateAclTool(server: McpServer): void {
+  server.registerTool(
+    "update_acl",
+    {
+      annotations: annotationsFor("update_acl"),
+      title: "Update ACL",
+      description:
+        "Change an access control's fields (roles: add_acl_role / remove_acl_role). " + SECURITY_CHANGE + " " +
+        "Deactivating (active=false) is a security change too: other ACLs, the parent table's, or the default then " +
+        "decide, and switching off a Deny-Unless ACL can only widen access.",
+      inputSchema: {
+        instance: instanceParam,
+        sys_id: sysIdParam("The ACL's sys_id."),
+        ...targetParams,
+        operation: z.string().optional().describe("Operation name."),
+        active: z.boolean().optional().describe("Activate (true) or deactivate (false)."),
+        ...fieldParams,
+      },
+    },
+    async (args) => {
+      try {
+        const result = await withConnectionRetry(
+          args.instance,
+          (sn) =>
+            new AclManager(sn).update(args.sys_id, {
+              ...target(args),
+              ...(args.operation !== undefined ? { operation: args.operation } : {}),
+              ...(args.active !== undefined ? { active: args.active } : {}),
+              ...(args.condition !== undefined ? { condition: args.condition } : {}),
+              ...(args.script !== undefined ? { script: args.script } : {}),
+              ...(args.admin_overrides !== undefined ? { adminOverrides: args.admin_overrides } : {}),
+              ...(args.decision_type !== undefined ? { decisionType: args.decision_type } : {}),
+              ...(args.description !== undefined ? { description: args.description } : {}),
+            }),
+          ELEVATED
+        );
+        return resultText("ACL updated.", result);
+      } catch (error) {
+        return aclErrorText("update_acl", error);
+      }
+    }
+  );
+}
+
+export function registerDeleteAclTool(server: McpServer): void {
+  server.registerTool(
+    "delete_acl",
+    {
+      annotations: annotationsFor("delete_acl"),
+      title: "Delete ACL",
+      description:
+        "Delete an access control and its role rows. " + SECURITY_CHANGE + " " +
+        "Prefer update_acl with active=false, which is reversible, unless the user asked to delete. An active record ACL " +
+        "is deactivated first (the platform deletes only inactive ones) and reactivated if the delete fails.",
+      inputSchema: {
+        instance: instanceParam,
+        sys_id: sysIdParam("The ACL's sys_id."),
+        confirm: sysIdParam("Repeat the ACL's sys_id exactly, to confirm the delete."),
+        ...targetParams,
+      },
+    },
+    async (args) => {
+      try {
+        const result = await withConnectionRetry(
+          args.instance,
+          (sn) => new AclManager(sn).delete(args.sys_id, { ...target(args), confirm: args.confirm }),
+          ELEVATED
+        );
+        return resultText("ACL deleted.", result);
+      } catch (error) {
+        return aclErrorText("delete_acl", error);
+      }
+    }
+  );
+}
+
+export function registerAddAclRoleTool(server: McpServer): void {
+  server.registerTool(
+    "add_acl_role",
+    {
+      annotations: annotationsFor("add_acl_role"),
+      title: "Add ACL Role",
+      description:
+        "Add a role to an access control: users with that role then pass it (roles are alternatives). " + SECURITY_CHANGE +
+        " To swap a role, add the new one before removing the old.",
+      inputSchema: {
+        instance: instanceParam,
+        sys_id: sysIdParam("The ACL's sys_id."),
+        role: z.string().describe("The role name to add."),
+        ...targetParams,
+      },
+    },
+    async (args) => {
+      try {
+        const result = await withConnectionRetry(
+          args.instance,
+          (sn) => new AclManager(sn).addRole(args.sys_id, args.role, target(args)),
+          ELEVATED
+        );
+        return resultText(`Role ${clean(args.role)} added.`, result);
+      } catch (error) {
+        return aclErrorText("add_acl_role", error);
+      }
+    }
+  );
+}
+
+export function registerRemoveAclRoleTool(server: McpServer): void {
+  server.registerTool(
+    "remove_acl_role",
+    {
+      annotations: annotationsFor("remove_acl_role"),
+      title: "Remove ACL Role",
+      description:
+        "Remove a role from an access control. " + SECURITY_CHANGE + " Removing the last role makes the platform put " +
+        "snc_internal back, which lets every internal user pass: add the intended role first. Never remove a role shown " +
+        "only as a sys_id (hidden): its name is unknown to this session.",
+      inputSchema: {
+        instance: instanceParam,
+        sys_id: sysIdParam("The ACL's sys_id."),
+        role: z.string().describe("The role name to remove."),
+        ...targetParams,
+      },
+    },
+    async (args) => {
+      try {
+        const result = await withConnectionRetry(
+          args.instance,
+          (sn) => new AclManager(sn).removeRole(args.sys_id, args.role, target(args)),
+          ELEVATED
+        );
+        return resultText(`Role ${clean(args.role)} removed.`, result);
+      } catch (error) {
+        return aclErrorText("remove_acl_role", error);
+      }
+    }
+  );
+}

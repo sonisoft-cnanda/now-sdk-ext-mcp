@@ -108,6 +108,23 @@ describe('getServiceNowInstance', () => {
     expect(mockGetCredentials).toHaveBeenCalledTimes(1)
   })
 
+  it('caches an elevated instance apart from the plain one, and passes the roles on', async () => {
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'admin', password: 'secret', instanceUrl: 'https://elevated.service-now.com',
+    })
+
+    const plain = await getServiceNowInstance('elevated-test')
+    const elevated = await getServiceNowInstance('elevated-test', { elevatedRoles: ['security_admin'] })
+
+    expect(elevated).not.toBe(plain)
+    expect((plain as any)._settings.elevatedRoles).toBeUndefined()
+    expect((elevated as any)._settings.elevatedRoles).toEqual(['security_admin'])
+    // Each is reused on its own: a plain call never gets the elevated instance.
+    expect(await getServiceNowInstance('elevated-test')).toBe(plain)
+    expect(await getServiceNowInstance('elevated-test', { elevatedRoles: ['security_admin'] })).toBe(elevated)
+    expect(await getServiceNowInstance('elevated-test', { elevatedRoles: [] })).toBe(plain)
+  })
+
   it('should maintain separate cache entries for different aliases', async () => {
     mockGetCredentials.mockImplementation(async (alias: string) => ({
       type: 'basic',
@@ -207,5 +224,22 @@ describe('getServiceNowInstance', () => {
     expect(operation).toHaveBeenCalledTimes(2)
     expect(mockGetCredentials.mock.calls).toEqual([[alias], [alias]])
     expect(operation.mock.calls[0]![0]).not.toBe(operation.mock.calls[1]![0])
+  })
+
+  it('retries an elevated operation on a fresh elevated instance, leaving the plain one cached', async () => {
+    const alias = 'retry-elevated'
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'fixture-user', password: 'fabricated', instanceUrl: 'https://fixture.invalid',
+    })
+    const plain = await getServiceNowInstance(alias)
+    const error = Object.assign(new Error('ECONNRESET'), { code: 'ECONNRESET' })
+    const operation = jest.fn<(instance: InstanceType<typeof ServiceNowInstance>) => Promise<string>>()
+      .mockRejectedValueOnce(error).mockResolvedValueOnce('recovered')
+
+    await expect(withConnectionRetry(alias, operation, { elevatedRoles: ['security_admin'] })).resolves.toBe('recovered')
+
+    for (const [instance] of operation.mock.calls) expect((instance as any)._settings.elevatedRoles).toEqual(['security_admin'])
+    expect(operation.mock.calls[0]![0]).not.toBe(operation.mock.calls[1]![0])
+    expect(await getServiceNowInstance(alias)).toBe(plain)
   })
 })

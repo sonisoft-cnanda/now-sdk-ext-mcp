@@ -92,6 +92,14 @@ All tools at a glance:
 | `inspect_update_set` | Inspect update set contents grouped by type |
 | `clone_update_set` | Clone an update set and its records |
 | `move_update_set_records` | Move records between update sets |
+| **Access Controls** | |
+| `list_acls` | List ACLs of a table, name or application, with their roles |
+| `get_acl` | Read one ACL: roles, condition, script |
+| `get_role_elevation` | Roles the user may elevate to (security_admin); optionally prove elevation |
+| `create_acl` | Create an ACL in an application's update set (elevates itself) |
+| `update_acl` | Change an ACL's fields, or (de)activate it |
+| `delete_acl` | Delete an ACL and its role rows (confirm required) |
+| `add_acl_role` / `remove_acl_role` | Add or remove one role of an ACL |
 | **Application Scope** | |
 | `get_current_scope` | Get the current application scope |
 | `set_current_scope` | Change the active application scope |
@@ -383,6 +391,20 @@ Update sets track configuration changes for migration between instances:
 - Use `create_update_set` → `set_current_update_set` before making changes
 - Use `inspect_update_set` to review what was captured
 - Use `clone_update_set` to create backups before deployment
+
+### Access Controls (ACLs)
+
+- One ACL secures one operation on one object (`incident`, `incident.number`, `incident.*`, a UI page, ...).
+  A record needs a passing table ACL and a passing field ACL.
+- Roles on one ACL are alternatives; the roles, condition and script are all required. Deny-Unless ACLs
+  (`decision_type: "deny"`) are checked first and grant nothing alone.
+- The platform puts `snc_internal` on an ACL with no role, and back when the last role is removed:
+  beside another role it lets every internal user pass. `create_acl` with `roles` removes it.
+- Changing an ACL needs the elevated `security_admin` role. The ACL write tools elevate their own
+  session (cached apart, so no other tool runs elevated) and write into the `update_set` you name.
+- Every ACL write is a security change: tell the user who gains or loses access and get their go-ahead.
+- Roles shown as `<sys_id> (hidden)` are ones the session cannot read (security_admin until elevated,
+  nobody and maint always). Never remove a role you cannot name.
 
 ---
 
@@ -910,6 +932,24 @@ query_update_records(table: "incident", query: "active=true^priority=5", data: {
 
 ---
 
+### Access Controls
+
+| Tool | Key Parameters | Description |
+|------|---------------|-------------|
+| `list_acls` | `table`, `name`, `scope`/`scope_id`, `operation`, `type`, `active`, `elevate` | List with roles (needs one of table, name, scope) |
+| `get_acl` | `sys_id`, `elevate` | One ACL with roles, condition, script; JSON included |
+| `get_role_elevation` | `elevate` (roles) | Elevatable roles; with `elevate`, elevates a session and proves it |
+| `create_acl` | `scope`/`scope_id`, `update_set`, `operation`, `type`, `table`, `field`, `name`, `roles`, `condition`, `script`, `admin_overrides`, `decision_type`, `active` | Create; staged inactive until its roles are verified |
+| `update_acl` | `sys_id`, target, `active`, `condition`, `script`, `admin_overrides`, `decision_type`, `description`, `operation` | Change fields |
+| `delete_acl` | `sys_id`, `confirm` (= `sys_id`), target | Delete with its role rows |
+| `add_acl_role` / `remove_acl_role` | `sys_id`, `role`, target | One role |
+
+Target on every write: `scope` (scope name or `"global"`) or `scope_id`, `update_set` (an In progress
+set of that application), and for an installed Store application `acknowledge_upgrade_skip`, only after
+the user's review.
+
+---
+
 ### Application Scope
 
 | Tool | Key Parameters | Description |
@@ -1301,6 +1341,9 @@ Step 4: Test with execute_script
 | Bulk update safely | `query_update_records` | `table`, `query`, `data`, `confirm` |
 | Bulk delete safely | `query_delete_records` | `table`, `query`, `confirm` |
 | Create update set | `create_update_set` | `name`, `description` |
+| See who an ACL lets in | `list_acls` / `get_acl` | `table` or `sys_id` |
+| Change an ACL (security change) | `create_acl` / `update_acl` / `add_acl_role` | `scope`, `update_set` |
+| Check role elevation | `get_role_elevation` | `elevate: ["security_admin"]` |
 | Export a record | `export_record_xml` | `table`, `sys_id` |
 | Pull a script | `pull_script` | `script_name`, `script_type`, `file_path` |
 | Push a script | `push_script` | `script_name`, `script_type`, `file_path` |
@@ -1322,6 +1365,7 @@ Step 4: Test with execute_script
 3. **Always verify the target instance.** Double-check the `instance` parameter when working with production instances.
 4. **Use update sets for configuration changes.** Create and set an update set before making customizations so changes can be tracked and migrated.
 5. **Script scope matters.** The `scope` parameter in `execute_script` controls which application context the script runs in, affecting table and API access.
+6. **ACL changes are security changes.** Before `create_acl`, `update_acl`, `delete_acl`, `add_acl_role` or `remove_acl_role`, tell the user who gains or loses access and get their go-ahead. Never write `sys_security_acl` or `sys_security_acl_role` with batch, bulk, XML import or `execute_script`: those skip elevation, verification and the update-set target.
 
 ---
 
@@ -1334,4 +1378,6 @@ Step 4: Test with execute_script
 | `ECONNREFUSED` | Instance unreachable | Check instance URL and network connectivity |
 | `401 Unauthorized` | Invalid or expired credentials | Reconfigure: `now-sdk auth add --alias <alias>` |
 | `ACL restriction` | Insufficient permissions | Ensure the authenticated user has required roles |
+| `role elevation failed: not_elevatable` | The user may not elevate to security_admin | Report it; do not grant the role or switch credentials |
+| `partially_applied` (ACL tools) | An ACL create or delete stopped part way | `get_acl` the named ACL and report; do not retry blindly |
 | `Body not XML` | Stale session or bad response | Tool auto-retries; if persistent, check instance health |

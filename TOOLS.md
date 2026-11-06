@@ -51,9 +51,9 @@ session.
 |---|---|
 | `full` | Everything. The default when the variable is unset. |
 | `readonly` | Only tools that cannot modify anything. Derived from the `readOnlyHint` annotations, so it cannot drift. |
-| `developer` | Scripts, schema, table behavior, source sync, update sets, scope, logs, code search. |
+| `developer` | Scripts, schema, table behavior, source sync, update sets, scope, ACLs, logs, code search. |
 | `service_desk` | Tickets, knowledge, catalog requests. No scripting or schema. |
-| `admin` | Users and groups, plugins, health, app lifecycle, scripting. |
+| `admin` | Users and groups, ACLs, plugins, health, app lifecycle, scripting. |
 | `change_manager` | Change approvals, update sets, flows and workflows, app repo. |
 | `flow_developer` | Flow Designer end to end, plus what is needed to debug flows. |
 
@@ -1461,6 +1461,224 @@ Total Records: 5
 --- UI Policy (1) ---
   Hide resolution fields when not resolved
 ```
+
+---
+
+## list_acls
+
+List access controls (`sys_security_acl`) with their roles. Needs at least one of `table`, `name`, `scope` or `scope_id`. `table` returns the table's own ACLs (`table`, `table.*`, `table.<field>`), not its parent tables'.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `table` | string | No | — | ACLs of this table. |
+| `name` | string | No | — | Exact ACL name, e.g. `incident.short_description`. |
+| `scope` / `scope_id` | string | No | — | Only this application's ACLs. |
+| `operation` | string | No | — | `read`, `write`, `create`, `delete`, `execute`, ... |
+| `type` | string | No | — | `record`, `ui_page`, `rest_endpoint`, `client_callable_script_include`, ... |
+| `active` | boolean | No | — | Only active or inactive ACLs. |
+| `elevate` | boolean | No | `false` | Read elevated to `security_admin`, so roles hidden until then show their names. Ask the user first. |
+
+### Example Output
+
+```
+2 ACL(s)
+
+1d0910cdc3023010a282a539e540dd13 active record write incident.* roles=[itil] +condition scope=global
+93a57806b7522010eeafbc16de11a980 active record write incident.reopened_time roles=[b05940500a0a0aa70090a4893f6ff35d (hidden)] scope=global
+```
+
+A role shown as `<sys_id> (hidden)` is one the session cannot read: `security_admin` until elevated, `nobody` and `maint` always.
+
+---
+
+## get_acl
+
+Read one access control with its roles, condition and script. The output ends with the record as JSON.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `sys_id` | string | **Yes** | — | The ACL's sys_id. |
+| `elevate` | boolean | No | `false` | Read elevated to `security_admin`. |
+
+---
+
+## get_role_elevation
+
+The elevated privilege roles (e.g. `security_admin`) the user may elevate to, as the Elevate Role dialog offers them. With `elevate`, elevates a session to those roles and proves they hold. Elevating changes no instance data, so it is a read: `NEX_POLICY_DENY` and the `readonly` package allow it.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `elevate` | string[] | No | — | Roles to elevate to and prove, e.g. `["security_admin"]`. |
+
+### Example Output
+
+```
+Roles this user may elevate to:
+- security_admin (ELEVATED): Grant modification access to High Security Settings, allow user to modify the Access Control List
+Elevated in this session: security_admin
+```
+
+---
+
+## create_acl
+
+Create an access control. With `roles`, the ACL is inserted inactive, given its roles, cleared of the `snc_internal` role the platform adds to a role-less ACL, checked, and only then activated. Without `roles`, `snc_internal` stays: every internal user who meets the condition or script passes.
+
+> **Warning:** A security change. Tell the user who gains or loses access and get their go-ahead first. The tool elevates its own session to `security_admin` (cached apart: no other tool runs elevated) and writes into the named update set, verifying each write.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
+| `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
+| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
+| `operation` | string | **Yes** | — | `read`, `write`, `create`, `delete`, `execute`, ... |
+| `type` | string | No | `record` | sys_security_type name. |
+| `table` | string | Record ACLs | — | The table. |
+| `field` | string | No | — | The field, or `*` for every field. Omit for the table itself. |
+| `name` | string | Other types | — | The resource name (UI page, REST endpoint, script include, ...). |
+| `roles` | string[] | No | — | Role names; any one of them passes. |
+| `active` | boolean | No | `true` | `false` creates it inactive. |
+| `condition` | string | No | — | Encoded query condition the record must meet. |
+| `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. |
+| `admin_overrides` | boolean | No | `true` on create | Whether admin passes regardless. |
+| `decision_type` | `allow` \| `deny` | No | `allow` | Deny-Unless ACLs are checked first and grant nothing alone. |
+| `description` | string | No | — | The platform may write its own on first save. |
+
+### Example Usage
+
+```json
+{
+  "name": "create_acl",
+  "arguments": {
+    "instance": "dev",
+    "scope": "x_acme_app",
+    "update_set": "3cc9f203531c9f90b6d61901a0490ed4",
+    "operation": "write",
+    "table": "x_acme_request",
+    "field": "cost",
+    "roles": ["x_acme_app.manager"]
+  }
+}
+```
+
+### Example Output
+
+```
+ACL created.
+
+ACL 41c9f203531c9f90b6d61901a0490eda: x_acme_request.cost (record, write)
+Scope: x_acme_app (921fd9af4c554457a73ad246c71a17f7)
+Roles: x_acme_app.manager
+...
+Removed the role the platform added on its own: snc_internal
+Verified writes:
+- insert sys_security_acl 41c9f203... in update set ACL work (3cc9f203...)
+- insert sys_security_acl_role 27c9b603... in update set ACL work (3cc9f203...)
+- delete sys_security_acl_role 8ac97603... in update set ACL work (3cc9f203...)
+- update sys_security_acl 41c9f203... in update set ACL work (3cc9f203...)
+
+JSON:
+{ ... the full result: acl, writes with their captures, removedAutomaticRoles, warnings ... }
+```
+
+---
+
+## update_acl
+
+Change an access control's fields. Roles change through `add_acl_role` / `remove_acl_role`. Deactivating (`active: false`) is a security change too: the other ACLs, the parent table's or the default then decide, and switching off a Deny-Unless ACL can only widen access.
+
+> **Warning:** A security change. Tell the user who gains or loses access and get their go-ahead first. The tool elevates its own session to `security_admin` (cached apart: no other tool runs elevated) and writes into the named update set, verifying each write.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `sys_id` | string | **Yes** | — | The ACL's sys_id. |
+| `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
+| `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
+| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
+| `operation` | string | No | — | Operation name. |
+| `active` | boolean | No | — | Activate or deactivate. |
+| `condition` | string | No | — | Encoded query condition the record must meet. |
+| `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. |
+| `admin_overrides` | boolean | No | `true` on create | Whether admin passes regardless. |
+| `decision_type` | `allow` \| `deny` | No | `allow` | Deny-Unless ACLs are checked first and grant nothing alone. |
+| `description` | string | No | — | The platform may write its own on first save. |
+
+---
+
+## delete_acl
+
+Delete an access control and its role rows (each captured as a DELETE). Prefer `update_acl` with `active: false`, which is reversible, unless the user asked to delete. An active record ACL is deactivated first (the platform deletes only inactive ones) and reactivated if the delete fails.
+
+> **Warning:** A security change. Tell the user who gains or loses access and get their go-ahead first. The tool elevates its own session to `security_admin` (cached apart: no other tool runs elevated) and writes into the named update set, verifying each write.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `sys_id` | string | **Yes** | — | The ACL's sys_id. |
+| `confirm` | string | **Yes** | — | The ACL's sys_id again, exactly. |
+| `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
+| `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
+| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
+
+---
+
+## add_acl_role
+
+Add a role to an access control: users with that role then pass it. To swap a role, add the new one before removing the old.
+
+> **Warning:** A security change. Tell the user who gains or loses access and get their go-ahead first. The tool elevates its own session to `security_admin` (cached apart: no other tool runs elevated) and writes into the named update set, verifying each write.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `sys_id` | string | **Yes** | — | The ACL's sys_id. |
+| `role` | string | **Yes** | — | The role name. |
+| `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
+| `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
+| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
+
+---
+
+## remove_acl_role
+
+Remove a role from an access control. Removing the last role makes the platform put `snc_internal` back, which lets every internal user pass: add the intended role first. Never remove a role shown only as a sys_id.
+
+> **Warning:** A security change. Tell the user who gains or loses access and get their go-ahead first. The tool elevates its own session to `security_admin` (cached apart: no other tool runs elevated) and writes into the named update set, verifying each write.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `sys_id` | string | **Yes** | — | The ACL's sys_id. |
+| `role` | string | **Yes** | — | The role name. |
+| `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
+| `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
+| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
 
 ---
 

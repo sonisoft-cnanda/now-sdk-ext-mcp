@@ -18,6 +18,22 @@ const CACHE_TTL_MS = 30 * 60 * 1000;
 
 const instanceCache = new Map<string, CacheEntry>();
 
+/** How a tool wants its connection: plain, or elevated to roles (e.g. security_admin) at every login. */
+export interface ConnectionOptions {
+  /**
+   * Elevated privilege roles every session of the instance elevates to as it logs in, as the
+   * Elevate Role dialog does. An elevated instance is cached apart from the plain one, so tools
+   * that do not ask for elevation never run on an elevated session.
+   */
+  elevatedRoles?: readonly string[];
+}
+
+/** The cache key: the alias, plus the elevated roles when there are any (core keys its sessions the same way). */
+function cacheKey(alias: string, options?: ConnectionOptions): string {
+  const roles = [...new Set(options?.elevatedRoles ?? [])].sort();
+  return roles.length ? `${alias}#elevated:${roles.join(",")}` : alias;
+}
+
 /**
  * Resolves the auth alias from the explicit parameter or the SN_AUTH_ALIAS env var.
  * Throws if neither is available.
@@ -46,11 +62,13 @@ function resolveAlias(authAlias?: string): string {
  * single conversation (e.g., myinstance and prod).
  */
 export async function getServiceNowInstance(
-  authAlias?: string
+  authAlias?: string,
+  options?: ConnectionOptions
 ): Promise<ServiceNowInstance> {
   const resolvedAlias = resolveAlias(authAlias);
+  const key = cacheKey(resolvedAlias, options);
 
-  const cached = instanceCache.get(resolvedAlias);
+  const cached = instanceCache.get(key);
   if (cached) {
     const age = Date.now() - cached.createdAt;
     if (age < CACHE_TTL_MS) {
@@ -58,7 +76,7 @@ export async function getServiceNowInstance(
     }
     // TTL expired — evict and create fresh
     log.debug("Cache TTL expired, refreshing session", { alias: resolvedAlias });
-    instanceCache.delete(resolvedAlias);
+    instanceCache.delete(key);
   }
 
   const credential = await resolveSessionCredentials(resolvedAlias);
@@ -88,10 +106,11 @@ export async function getServiceNowInstance(
     alias: resolvedAlias,
     credential,
     credentialProvider: () => resolveSessionCredentials(resolvedAlias),
+    ...(options?.elevatedRoles?.length ? { elevatedRoles: [...options.elevatedRoles] } : {}),
   };
 
   const instance = new ServiceNowInstance(snSettings);
-  instanceCache.set(resolvedAlias, {
+  instanceCache.set(key, {
     instance,
     createdAt: Date.now(),
   });
@@ -100,12 +119,12 @@ export async function getServiceNowInstance(
 
 /**
  * Evicts a cached instance so the next call to getServiceNowInstance()
- * creates a fresh connection.
+ * creates a fresh connection. With options, only that (plain or elevated) instance.
  */
-export function clearInstance(authAlias?: string): void {
+export function clearInstance(authAlias?: string, options?: ConnectionOptions): void {
   const resolved = authAlias || process.env.SN_AUTH_ALIAS;
   if (resolved) {
-    instanceCache.delete(resolved);
+    instanceCache.delete(cacheKey(resolved, options));
   }
 }
 
@@ -165,9 +184,10 @@ export function isRetryableResponse(
  */
 export async function withConnectionRetry<T>(
   authAlias: string | undefined,
-  operation: (instance: ServiceNowInstance) => Promise<T>
+  operation: (instance: ServiceNowInstance) => Promise<T>,
+  options?: ConnectionOptions
 ): Promise<T> {
-  const snInstance = await getServiceNowInstance(authAlias);
+  const snInstance = await getServiceNowInstance(authAlias, options);
   try {
     return await operation(snInstance);
   } catch (error) {
@@ -175,8 +195,8 @@ export async function withConnectionRetry<T>(
       // The error went into the message before, unredacted — an auth or HTTP failure
       // here carries a live session. As metadata it goes through redaction.
       log.warn("Retryable error, refreshing session and retrying", { error });
-      clearInstance(authAlias);
-      const freshInstance = await getServiceNowInstance(authAlias);
+      clearInstance(authAlias, options);
+      const freshInstance = await getServiceNowInstance(authAlias, options);
       return await operation(freshInstance);
     }
     throw error;

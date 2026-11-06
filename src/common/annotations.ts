@@ -227,6 +227,21 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     close_incident: SET,
     approve_change: SET,
 
+    // ---- access controls. Reads change nothing; elevating a session (get_role_elevation,
+    // elevate on a read) changes no instance data, so it is a read. The writes change who
+    // may do what: creating and adding a role only add, but deactivating, removing a role
+    // or deleting can open access as well as close it, so those are destructive.
+    list_acls: READ,
+    get_acl: READ,
+    get_role_elevation: READ,
+    create_acl: CREATE,
+    // Repeating with the same values leaves the same ACL; the previous values are overwritten.
+    update_acl: OVERWRITE,
+    delete_acl: OVERWRITE,
+    // A second call refuses (role_already_present / role_not_present): the end state settles.
+    add_acl_role: SET,
+    remove_acl_role: OVERWRITE,
+
     // ---- update sets
     get_current_update_set: READ,
     list_update_sets: READ,
