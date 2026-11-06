@@ -217,7 +217,8 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
     change_manager: {
         description:
             "Change and release work: change approvals, update sets, flows and " +
-            "workflows, and the app repo.",
+            "workflows (including running flows and sending flow messages, which need " +
+            "execute), and the app repo.",
         tools: [
             "find_task",
             "query_table",

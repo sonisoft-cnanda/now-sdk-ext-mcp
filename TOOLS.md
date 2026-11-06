@@ -54,7 +54,7 @@ session.
 | `developer` | Scripts, schema, table behavior, source sync, update sets, scope, ACLs, logs, code search. |
 | `service_desk` | Tickets, knowledge, catalog requests. No scripting or schema. |
 | `admin` | Users and groups, ACLs, plugins, health, app lifecycle (including repair), scripting. |
-| `change_manager` | Change approvals, update sets, flows and workflows (including the legacy workflow tools), app repo. |
+| `change_manager` | Change approvals, update sets, flows and workflows (including the legacy workflow tools, and running flows and sending flow messages, which need `execute`), app repo. |
 | `flow_developer` | Flow Designer end to end, plus what is needed to debug flows. |
 
 Names can be **comma-separated**, which takes the **union**: `developer,flow_developer`.
@@ -3272,7 +3272,7 @@ Groups returned: 4
 
 ## list_transactions
 
-List the transactions running now on every responding cluster node (Active Transactions, All Nodes): user, age, type, state, query count and URL. URLs are shown without query or matrix (`;`) values or fragment (other users' requests can carry tokens there); the path itself is kept, so a secret placed in a path segment would still show. The rows are fenced as data and cut at 80,000 characters. The nodes are asked to report and then polled, so this can take a few seconds; polling stops if the client cancels.
+List the transactions running now on every responding cluster node (Active Transactions, All Nodes): user, age, type, state, query count and URL. URLs are shown without query or matrix (`;`) values or fragment (other users' requests can carry tokens there); the path itself is kept, as are keys without a value and matrix parameters without `=`, so a secret placed there would still show. The rows are fenced as data and cut at 80,000 characters. The nodes are asked to report and then polled, so this can take a few seconds; polling stops if the client cancels.
 
 ### Parameters
 

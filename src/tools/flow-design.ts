@@ -20,7 +20,8 @@ const SYS_ID = /^[0-9a-f]{32}$/;
 const SCOPE = /^[a-z0-9_]{1,80}$/;
 // Core puts the message and payload into a single-quoted script literal: a line break there is a syntax error.
 const SCRIPT_SAFE = /^[^\p{Cc}\u2028\u2029]*$/u;
-// Core's messages for a background script that was never run.
+// Core's messages (as of 6.18.7) for a background script that was never run. A rewording falls back to "may have
+// been delivered", the safe side.
 const PRE_SEND = /not permitted in this session|Failed to obtain CSRF token|answered "not authorized" and did not run the script/;
 
 function failure(lines: string[]) {
@@ -46,7 +47,7 @@ export function registerGetFlowDefinitionTool(server: McpServer): void {
         view: z
           .enum(["summary", "full"])
           .optional()
-          .describe("summary (default): name, scope, state and counts, plus an action's steps. full: the complete definition as compact JSON."),
+          .describe("summary (default): name, scope, state and counts, plus an action's steps. full: the complete definition as compact JSON (a long one is cut, and then is not valid JSON)."),
       },
     },
     async ({ instance, sys_id, type, scope, view }) => {
