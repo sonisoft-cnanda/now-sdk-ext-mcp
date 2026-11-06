@@ -33,6 +33,18 @@ export interface ToolPackage {
     tools: string[];
 }
 
+/** Every ACL and role-elevation tool: reading ACLs, and changing them into an application's update set. */
+const ACL_TOOLS = [
+    "list_acls",
+    "get_acl",
+    "get_role_elevation",
+    "create_acl",
+    "update_acl",
+    "delete_acl",
+    "add_acl_role",
+    "remove_acl_role",
+];
+
 export const TOOL_PACKAGES: Record<string, ToolPackage> = {
     full: {
         description: "Every tool. The default when MCP_TOOL_PACKAGE is unset.",
@@ -87,15 +99,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "find_task",
             "export_record_xml",
             "import_records_xml",
-            // An app's ACLs: reading them, and changing them into the app's update set.
-            "list_acls",
-            "get_acl",
-            "get_role_elevation",
-            "create_acl",
-            "update_acl",
-            "delete_acl",
-            "add_acl_role",
-            "remove_acl_role",
+            ...ACL_TOOLS,
         ],
     },
 
@@ -148,14 +152,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "validate_app_install",
             "install_store_app",
             "update_store_app",
-            "list_acls",
-            "get_acl",
-            "get_role_elevation",
-            "create_acl",
-            "update_acl",
-            "delete_acl",
-            "add_acl_role",
-            "remove_acl_role",
+            ...ACL_TOOLS,
             // Pending NEX-38.
             "find_user",
             "list_users",

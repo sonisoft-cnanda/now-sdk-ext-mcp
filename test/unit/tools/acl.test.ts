@@ -147,7 +147,7 @@ describe('reads', () => {
     expect(manager.get).not.toHaveBeenCalled()
   })
 
-  it('reports elevation status, elevating only the roles asked for', async () => {
+  it('reports elevation status, elevating to security_admin only when asked', async () => {
     mockStatus.mockResolvedValue({ available: [{ name: 'security_admin', description: 'High security' }], elevated: ['security_admin'] })
     const { text } = await call('get_role_elevation', { elevate: true })
     expect(options()).toEqual({ elevatedRoles: ['security_admin'] })
@@ -248,7 +248,7 @@ describe('writes', () => {
     manager.update.mockRejectedValue(new MetadataVerificationError('write_not_applied', ['a <b><i>x</i></b> <script src=1'], true))
     const { text } = await call('update_acl', { sys_id: ACL, scope: 'x_app', update_set: SET, condition: 'active=true' })
     expect(text).not.toMatch(/<b>|<i>|<\/b>/)
-    expect(text).toContain('Instance said: a [omitted][omitted]x[omitted][omitted] <script src=1')
+    expect(text).toContain('Instance said: a [omitted][omitted]x[omitted][omitted] [omitted]')
   })
 
   it('reports unverified writes, scope and policy refusals', async () => {

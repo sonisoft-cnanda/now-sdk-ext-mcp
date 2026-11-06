@@ -378,7 +378,13 @@ plain one, and no other tool ever runs elevated. Elevating changes no instance d
 `NEX_POLICY_DENY` and the `readonly` package still allow `get_role_elevation` and elevated reads,
 while the ACL writes are refused like any other write. Code on an ACL (a script, or a `javascript:`
 condition) runs on the instance at every check, so writing it also needs `execute`: `NEX_POLICY_DENY=execute`
-allows role-only ACL changes and refuses ones that carry code. A user may elevate to `security_admin` only
+allows role-only ACL changes and refuses ones that carry code, or that make existing code run where it did not
+(switching on, changing the operation, turning admin overrides off).
+
+Because elevating is a read, a read-only session (`MCP_TOOL_PACKAGE=readonly` or `NEX_POLICY_DENY=all`) can still
+elevate: `get_role_elevation` and `elevate` on `list_acls` / `get_acl` open a `security_admin` session. It changes no
+data, and the server drops it after 10 minutes, but on the instance the session stays elevated until its idle
+timeout. A user may elevate to `security_admin` only
 when it is assigned to them; in the base system only the `admin` user has it. The ACL write tools need
 an `update_set`, so a security change is never captured in whatever set the user has open. Elevation
 was verified with basic-auth aliases.

@@ -72,7 +72,10 @@ const targetParams = {
 
 /** The ACL's own fields, shared by create_acl and update_acl; update_acl leaves an omitted field unchanged. */
 const fieldParams = {
-  condition: z.string().optional().describe("Encoded query condition the record must meet."),
+  condition: z
+    .string()
+    .optional()
+    .describe("Encoded query condition the record must meet. A javascript: value in it is code: it needs permission to run code as well as to write."),
   script: z
     .string()
     .optional()
@@ -117,7 +120,8 @@ function target(args: TargetArgs): AclWriteTarget {
 
 // Values come from the instance: one line each, no control characters.
 const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
-const cleanMessage = (text: string): string => redactMessage(text).replace(/<[^>]*>/g, "[omitted]").replace(/\p{Cc}/gu, " ");
+const cleanMessage = (text: string): string =>
+  redactMessage(text).replace(/<[^>]*>/g, "[omitted]").replace(/<[^>]*$/, "[omitted]").replace(/\p{Cc}/gu, " ");
 
 /** A role the session may not read (security_admin until elevated; nobody and maint always) has no name. */
 const roleName = (role: { role: string; roleSysId: string }) => clean(role.role) || `${role.roleSysId} (hidden)`;
@@ -422,6 +426,8 @@ export function registerUpdateAclTool(server: McpServer): void {
       title: "Update ACL",
       description:
         "Change an access control's fields (roles: add_acl_role / remove_acl_role). " + SECURITY_CHANGE + " " +
+        "On an ACL that already has code (a script or javascript: condition), switching it on, changing its operation " +
+        "or turning admin overrides off also needs permission to run code. " +
         "Deactivating (active=false) is a security change too: other ACLs, the parent table's, or the default then " +
         "decide, and switching off a Deny-Unless ACL can only widen access.",
       inputSchema: {

@@ -1551,7 +1551,7 @@ Create an access control. With `roles`, the ACL is inserted inactive, given its 
 | `name` | string | Other types | — | The resource name (UI page, REST endpoint, script include, ...). |
 | `roles` | string[] | No | — | Role names; any one of them passes. Omit (not `[]`) for an ACL decided by its condition or script alone. |
 | `active` | boolean | No | `true` | `false` creates it inactive. |
-| `condition` | string | No | — | Encoded query condition the record must meet. |
+| `condition` | string | No | — | Encoded query condition the record must meet. A `javascript:` value is code: it needs execute as well as write. |
 | `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. Code on an ACL (a script, or a `javascript:` condition) needs permission to run code as well as to write: `NEX_POLICY_DENY=execute` refuses it. |
 | `admin_overrides` | boolean | No | `true` on create | Whether admin passes regardless. |
 | `decision_type` | `allow` \| `deny` | No | `allow` | Deny-Unless ACLs are checked first and grant nothing alone. |
@@ -1598,7 +1598,7 @@ JSON:
 
 ## update_acl
 
-Change an access control's fields. Roles change through `add_acl_role` / `remove_acl_role`. Deactivating (`active: false`) is a security change too: the other ACLs, the parent table's or the default then decide, and switching off a Deny-Unless ACL can only widen access.
+Change an access control's fields. Roles change through `add_acl_role` / `remove_acl_role`. On an ACL that already has code, switching it on, changing its operation or turning admin overrides off also needs execute. Deactivating (`active: false`) is a security change too: the other ACLs, the parent table's or the default then decide, and switching off a Deny-Unless ACL can only widen access.
 
 > **Warning:** A security change. Tell the user who gains or loses access and get their go-ahead first. The tool elevates its own session to `security_admin` (cached apart: no other tool runs elevated) and writes into the named update set, verifying each write.
 
@@ -1614,7 +1614,7 @@ Change an access control's fields. Roles change through `add_acl_role` / `remove
 | `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. |
 | `operation` | string | No | — | Operation name. |
 | `active` | boolean | No | — | Activate or deactivate. |
-| `condition` | string | No | — | Encoded query condition the record must meet. |
+| `condition` | string | No | — | Encoded query condition the record must meet. A `javascript:` value is code: it needs execute as well as write. |
 | `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. Code on an ACL (a script, or a `javascript:` condition) needs permission to run code as well as to write: `NEX_POLICY_DENY=execute` refuses it. |
 | `admin_overrides` | boolean | No | — | Whether admin passes regardless. |
 | `decision_type` | `allow` \| `deny` | No | — | Deny-Unless ACLs are checked first and grant nothing alone. |
