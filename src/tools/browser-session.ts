@@ -156,6 +156,8 @@ export function registerCreateBrowserSessionTool(server: McpServer): void {
         const who = clean(alias);
         const where = clean(session.instanceUrl);
         const content = JSON.stringify(session.storageState);
+        // The same bound delete applies, so every file this writes can be deleted by it.
+        if (Buffer.byteLength(content, "utf8") > MAX_STATE_BYTES) throw new SessionFileError("session_write_failed");
         const path = await writeSessionFile(directory, fileName, content);
         return text([
           `Browser session for ${who} (${where}) written to ${path} (mode 0600, ${cookies} cookie(s)).`,
@@ -171,7 +173,7 @@ export function registerCreateBrowserSessionTool(server: McpServer): void {
         }
         if (error instanceof SessionAuthError) {
           return {
-            ...text([`Error (create_browser_session): ${error.code}: ${cleanMessage(error.remediation)}`, "Nothing was written."]),
+            ...text([`Error (create_browser_session): ${clean(error.code)}: ${cleanMessage(error.remediation)}`, "Nothing was written."]),
             isError: true,
           };
         }
