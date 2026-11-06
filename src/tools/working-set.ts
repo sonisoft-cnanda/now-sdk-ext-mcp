@@ -16,6 +16,9 @@ import {
 } from "@sonisoft/now-sdk-ext-core";
 import { withConnectionRetry } from "../common/connection.js";
 import { annotationsFor } from "../common/annotations.js";
+import { getLogger } from "../common/logging.js";
+
+const log = getLogger("working-set");
 
 /**
  * The update-set lifecycle, as `nex update-set use|restore|complete|move-capture|export` does it: every
@@ -66,11 +69,14 @@ const WORKING_SET_REMEDIATION: Record<string, string> = {
     "The set holds a different number of captures than you reviewed (expected vs actual). List them again before completing.",
   capture_not_in_source: "The capture is not in the source set. Read sys_update_xml.update_set for it.",
   complete_not_applied: "A business rule may have refused completion. Read the message in the UI or syslog.",
+  create_not_applied: "The insert returned no sys_id. Look for the set by name in sys_update_set before retrying.",
   default_update_set:
     "A Default set is not for development work and never ships. Create a set in the application and use that one.",
   duplicate_capture: "The target already holds a capture of this record, or the set holds two. Resolve the duplicate first.",
   evidence_unavailable: "The instance did not return complete evidence. Retry the read; change nothing until it is complete.",
-  invalid_input: "Check the sys_ids, the application and the reason (letters, digits and simple punctuation).",
+  invalid_input:
+    "A value failed validation: the sys_ids, the reason (letters, digits and simple punctuation), the name (1 to 80 " +
+    "characters, no control characters), or an application scope name that matches more than one application.",
   mixed_scope_capture: "The set holds captures of other applications (listed): move them to their own Default first.",
   move_not_applied:
     'The platform aborted the move. Read the row back; a set of another scope is refused by "Handle updates moving between sets".',
@@ -106,7 +112,7 @@ const EXPORT_REMEDIATION: Record<string, string> = {
 
 class OutputError extends Error {
   /** afterExport: the instance side already ran (and cleaned up); only the local file is missing. */
-  constructor(public readonly code: "output_exists" | "output_invalid" | "output_write_failed", public afterExport = false) {
+  constructor(public readonly code: "output_exists" | "output_invalid" | "output_write_failed" | "export_dir_misconfigured", public afterExport = false) {
     super(code);
   }
 }
@@ -114,9 +120,11 @@ class OutputError extends Error {
 const OUTPUT_REMEDIATION: Record<string, string> = {
   output_exists: "The output file exists. Choose another path, or replace it only if the user asked to.",
   output_invalid:
-    "The path must be absolute and end in .xml, inside NEX_EXPORT_DIR when that is set (which must itself be absolute), " +
-    "in an existing writable directory, " +
+    "The path must be absolute and end in .xml, inside NEX_EXPORT_DIR when that is set, in an existing writable directory, " +
     "and (to replace) name a regular file. Choose another path.",
+  export_dir_misconfigured:
+    "The server's NEX_EXPORT_DIR is not an absolute, existing directory, so no export path will be accepted until the " +
+    "server configuration is fixed. Tell the user; do not try other paths.",
   output_write_failed:
     "The export succeeded on the instance but the file could not be written (disk space or the filesystem). " +
     "Nothing was left on the instance; fix the location and export again.",
@@ -283,9 +291,13 @@ async function checkOutput(output: string, replace: boolean): Promise<string> {
   const path = resolve(output);
   const root = process.env.NEX_EXPORT_DIR;
   if (root) {
-    // A relative root would resolve against the working directory the client chose: misconfigured, so refuse.
-    if (!isAbsolute(root)) throw new OutputError("output_invalid");
-    const within = relative(await realpath(root).catch(() => root), await realpath(dirname(path)).catch(() => dirname(path)));
+    // A relative root would resolve against the working directory the client chose; a missing one refuses every path.
+    const realRoot = isAbsolute(root) ? await realpath(root).catch(() => undefined) : undefined;
+    if (!realRoot || !(await stat(realRoot).then((s) => s.isDirectory(), () => false))) {
+      log.warn("NEX_EXPORT_DIR is not an absolute, existing directory; refusing every export");
+      throw new OutputError("export_dir_misconfigured");
+    }
+    const within = relative(realRoot, await realpath(dirname(path)).catch(() => dirname(path)));
     if (within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) throw new OutputError("output_invalid");
   }
   const parent = await stat(dirname(path)).catch(() => undefined);

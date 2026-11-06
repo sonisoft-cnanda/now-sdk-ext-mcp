@@ -211,7 +211,9 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           ),
         name: z
           .string()
-          .describe("The name of the update set to create."),
+          .min(1)
+          .max(80)
+          .describe("The name of the update set to create (at most 80 characters)."),
         description: z
           .string()
           .optional()
@@ -220,7 +222,8 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           .string()
           .optional()
           .describe(
-            "Optional application scope sys_id to associate with the update set."
+            "The application the set belongs to: global, a sys_scope sys_id, or a scope name that matches exactly one " +
+              "active application. Create the set in the application you are changing."
           ),
       },
     },

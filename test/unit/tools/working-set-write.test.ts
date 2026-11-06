@@ -28,6 +28,8 @@ jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
   WorkingSetManager: jest.fn(), UpdateSetExporter: jest.fn().mockImplementation(() => ({ exportUpdateSet })),
   WorkingSetError: class extends Error {}, UpdateSetExportError: class extends Error {},
   isPolicyRefusal: () => false, redactMessage: (m: string) => m,
+  Logger: jest.fn().mockImplementation(() => ({ debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() })),
+  configureLogging: jest.fn(), redactValue: jest.fn((v: unknown) => v), flushLogs: jest.fn(() => Promise.resolve()),
 }))
 const { registerExportUpdateSetTool } = await import('../../../src/tools/working-set.js')
 

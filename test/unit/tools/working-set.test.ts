@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 
 const mockWithConnectionRetry = jest.fn<(alias: any, op: any, options?: any) => Promise<any>>()
 jest.unstable_mockModule('../../../src/common/connection.js', () => ({ withConnectionRetry: mockWithConnectionRetry }))
@@ -16,6 +16,7 @@ const ws = {
   moveCapture: jest.fn<(...a: any[]) => Promise<any>>(),
 }
 const exportUpdateSet = jest.fn<(...a: any[]) => Promise<any>>()
+const createUpdateSet = jest.fn<(...a: any[]) => Promise<any>>()
 class WorkingSetError extends Error { constructor(public code: string, public detail?: any) { super(`Update set operation failed: ${code}`) } }
 class UpdateSetExportError extends Error { constructor(public code: string, public detail?: any) { super(`Update set export failed: ${code}`) } }
 class PolicyRefusal extends Error {}
@@ -23,7 +24,7 @@ class PolicyRefusal extends Error {}
 jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
   WorkingSetManager: jest.fn().mockImplementation(() => ws),
   UpdateSetExporter: jest.fn().mockImplementation(() => ({ exportUpdateSet })),
-  UpdateSetManager: jest.fn().mockImplementation(() => ({})),
+  UpdateSetManager: jest.fn().mockImplementation(() => ({ createUpdateSet })),
   WorkingSetError, UpdateSetExportError,
   isPolicyRefusal: (e: unknown) => e instanceof PolicyRefusal,
   redactMessage: (m: string) => m,
@@ -35,7 +36,7 @@ jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
 }))
 
 const tools = await import('../../../src/tools/working-set.js')
-const { registerSetCurrentUpdateSetTool } = await import('../../../src/tools/updateset.js')
+const { registerSetCurrentUpdateSetTool, registerCreateUpdateSetTool } = await import('../../../src/tools/updateset.js')
 
 const SET = 'c'.repeat(32), OTHER = 'd'.repeat(32), APP = 'a'.repeat(32), CAP = 'e'.repeat(32)
 const summary = (sysId: string, state = 'in progress') => ({ sysId, name: `Set ${sysId[0]}`, state, application: APP, isDefault: false })
@@ -46,7 +47,7 @@ beforeEach(async () => {
   mockWithConnectionRetry.mockImplementation(async (_a: any, op: any) => op({}))
   dir = mkdtempSync(join(tmpdir(), 'mcp-export-'))
   server = new McpServer({ name: 't', version: '1' })
-  for (const r of [registerSetCurrentUpdateSetTool, tools.registerRestoreUpdateSetTool, tools.registerCompleteUpdateSetTool,
+  for (const r of [registerCreateUpdateSetTool, registerSetCurrentUpdateSetTool, tools.registerRestoreUpdateSetTool, tools.registerCompleteUpdateSetTool,
     tools.registerMoveUpdateSetCaptureTool, tools.registerExportUpdateSetTool]) r(server)
   const [c, s] = InMemoryTransport.createLinkedPair()
   await server.connect(s)
@@ -109,6 +110,20 @@ describe('set_current_update_set', () => {
   it('requires a sys_id', async () => {
     expect((await call('set_current_update_set', { name: 'x' })).isError).toBe(true)
     expect(ws.useUpdateSet).not.toHaveBeenCalled()
+  })
+})
+
+describe('create_update_set', () => {
+  it('never replays, explains an unknown application, and says a lost create may have landed', async () => {
+    createUpdateSet.mockRejectedValue(new WorkingSetError('application_not_found'))
+    let r = await call('create_update_set', { name: 'FEAT-1', application: 'x_unknown' })
+    expect(options()).toEqual({ retry: false })
+    expect(r.text).toContain('application_not_found')
+    expect(r.text).toContain('a scope name that matches exactly one active application')
+    createUpdateSet.mockRejectedValue(new Error('socket hang up'))
+    r = await call('create_update_set', { name: 'FEAT-1' })
+    expect(r.text).toContain('may have been applied')
+    expect((await call('create_update_set', { name: 'x'.repeat(81) })).isError).toBe(true)
   })
 })
 
@@ -203,7 +218,7 @@ describe('export_update_set', () => {
     expect(readFileSync(target, 'utf8')).toBe('target')
   })
 
-  it('refuses a directory in the way, or an unwritable directory, before copying anything', async () => {
+  ;(process.getuid?.() === 0 ? it.skip : it)('refuses a directory in the way, or an unwritable directory, before copying anything', async () => {
     const asDir = join(dir, 'taken.xml'); mkdirSync(asDir)
     expect((await call('export_update_set', { sys_id: SET, output: asDir, replace: true })).text).toContain('output_invalid')
     const locked = join(dir, 'locked'); mkdirSync(locked); chmodSync(locked, 0o500)
@@ -213,7 +228,9 @@ describe('export_update_set', () => {
     expect(exportUpdateSet).not.toHaveBeenCalled()
   })
 
-  it('says the export already ran when the directory stopped being writable meanwhile', async () => {
+  // Root passes access(W_OK) whatever the mode, so the permission tests cannot run as root.
+  const asRoot = process.getuid?.() === 0
+  ;(asRoot ? it.skip : it)('says the export already ran when the directory stopped being writable meanwhile', async () => {
     exportUpdateSet.mockImplementation(async () => { chmodSync(dir, 0o500); return result })
     try {
       const { text } = await call('export_update_set', { sys_id: SET, output: join(dir, 'late.xml') })
@@ -223,10 +240,19 @@ describe('export_update_set', () => {
     expect(readdirSync(dir)).toEqual([])
   })
 
-  it('refuses a relative NEX_EXPORT_DIR, and accepts a subdirectory whose name starts with dots', async () => {
-    process.env.NEX_EXPORT_DIR = 'exports'
-    try { expect((await call('export_update_set', { sys_id: SET, output: join(dir, 'a.xml') })).text).toContain('output_invalid') }
-    finally { delete process.env.NEX_EXPORT_DIR }
+  it('refuses every export while NEX_EXPORT_DIR is relative or missing, and says it is the server configuration', async () => {
+    for (const root of [relative(process.cwd(), dir), join(dir, 'missing')]) {
+      process.env.NEX_EXPORT_DIR = root
+      try {
+        const { text } = await call('export_update_set', { sys_id: SET, output: join(dir, 'a.xml') })
+        expect(text).toContain('export_dir_misconfigured')
+        expect(text).toContain('do not try other paths')
+      } finally { delete process.env.NEX_EXPORT_DIR }
+    }
+    expect(exportUpdateSet).not.toHaveBeenCalled()
+  })
+
+  it('accepts a subdirectory of NEX_EXPORT_DIR whose name starts with dots', async () => {
     const dots = join(dir, '..drafts'); mkdirSync(dots)
     process.env.NEX_EXPORT_DIR = dir
     exportUpdateSet.mockResolvedValue(result)
