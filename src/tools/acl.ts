@@ -535,7 +535,8 @@ export function registerRemoveAclRoleTool(server: McpServer): void {
       title: "Remove ACL Role",
       description:
         "Remove a role from an access control. " + SECURITY_CHANGE + " Removing the last role makes the platform put " +
-        "snc_internal back, which lets every internal user pass: add the intended role first. Never remove a role shown " +
+        "snc_internal back, which lets every internal user pass (and run any script the ACL has): add the intended role " +
+        "first. Never remove a role shown " +
         "only as a sys_id (hidden): its name is unknown to this session.",
       inputSchema: {
         instance: instanceParam,
