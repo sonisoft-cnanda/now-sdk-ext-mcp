@@ -252,8 +252,10 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     get_current_update_set: READ,
     list_update_sets: READ,
     inspect_update_set: READ,
-    // Creating a set and switching the working set run a background script (the preferences are
-    // saved server-side), so both need execute as well as write.
+    // Switching the working set runs a background script (the preferences are saved server-side).
+    // Creating a set runs one when it names an application; the static verb cannot see the
+    // argument, so create needs execute too (a deliberate tradeoff: a plain create is refused
+    // under deny-execute).
     create_update_set: { ...CREATE, verbs: ["execute", "write"] },
     set_current_update_set: { ...SET, verbs: ["execute", "write"] },
     restore_update_set: { ...SET, verbs: ["execute", "write"] },

@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { UpdateSetManager, WorkingSetManager } from "@sonisoft/now-sdk-ext-core";
-import { setLine, workingSetErrorText } from "./working-set.js";
+import { setLine, workingSetErrorText, workingSetLine } from "./working-set.js";
 import { withConnectionRetry } from "../common/connection.js";
 import { progressReporter } from "../common/progress.js";
 import { annotationsFor } from "../common/annotations.js";
@@ -226,10 +226,11 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
     },
     async ({ instance, name, description, application }) => {
       try {
+        // Not replayed: a create that landed before its response was lost would come back as a duplicate.
         const result = await withConnectionRetry(instance, async (snInstance) => {
           const manager = new UpdateSetManager(snInstance);
           return await manager.createUpdateSet({ name, description, application });
-        });
+        }, { retry: false });
 
         const lines = [
           `Update set created successfully.`,
@@ -315,9 +316,12 @@ export function registerSetCurrentUpdateSetTool(server: McpServer): void {
               type: "text" as const,
               text: [
                 `Working set changed (read back): ${setLine(result.updateSet)}`,
-                `Application: ${result.current.application}`,
-                `Previous working set: application ${result.previous.application}, update set ${result.previous.updateSet}`,
-                "Restore it with restore_update_set (application, update_set) when the work is done.",
+                ...(result.previous.updateSet === sys_id
+                  ? ["It was already the working set: keep the previous working set from the earlier call to restore later."]
+                  : [
+                      `Previous working set: ${workingSetLine(result.previous)}`,
+                      "Restore it with restore_update_set (application, update_set) when the work is done.",
+                    ]),
               ].join("\n"),
             },
           ],

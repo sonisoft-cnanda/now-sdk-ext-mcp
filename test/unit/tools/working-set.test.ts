@@ -2,7 +2,7 @@ import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, readdirSync } from 'node:fs'
+import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -83,6 +83,23 @@ describe('set_current_update_set', () => {
     expect(r.text).toContain(`restore it with restore_update_set`)
   })
 
+  it('reports a user with no saved working set so that restore can take it back', async () => {
+    ws.useUpdateSet.mockResolvedValue({ previous: { application: '', updateSet: '' }, current: { application: APP, updateSet: SET }, updateSet: summary(SET) })
+    const { text } = await call('set_current_update_set', { sys_id: SET })
+    expect(text).toContain('none saved (the platform default: Global and its Default set); restore it by passing empty strings')
+    ws.restoreWorkingSet.mockResolvedValue({ restored: { application: 'global', updateSet: OTHER }, fallback: 'application_default' })
+    const r = await call('restore_update_set', { application: '', update_set: '' })
+    expect(r.isError).toBe(false)
+    expect(ws.restoreWorkingSet).toHaveBeenCalledWith({ application: '', updateSet: '' })
+  })
+
+  it('says when the set was already the working set instead of reporting it as the previous one', async () => {
+    ws.useUpdateSet.mockResolvedValue({ previous: { application: APP, updateSet: SET }, current: { application: APP, updateSet: SET }, updateSet: summary(SET) })
+    const { text } = await call('set_current_update_set', { sys_id: SET })
+    expect(text).toContain('It was already the working set')
+    expect(text).not.toContain('Previous working set')
+  })
+
   it('requires a sys_id', async () => {
     expect((await call('set_current_update_set', { name: 'x' })).isError).toBe(true)
     expect(ws.useUpdateSet).not.toHaveBeenCalled()
@@ -152,6 +169,52 @@ describe('export_update_set', () => {
     expect(r.text).toContain('output_invalid')
     expect(exportUpdateSet).not.toHaveBeenCalled()
     expect(readFileSync(output, 'utf8')).toBe('keep')
+  })
+
+  it('accepts only an absolute .xml path, inside NEX_EXPORT_DIR when set, before copying anything', async () => {
+    for (const output of ['relative.xml', join(dir, 'notes.txt'), join(dir, '.bashrc'), dir + '/']) {
+      expect((await call('export_update_set', { sys_id: SET, output })).text).toContain('output_invalid')
+    }
+    const inside = join(dir, 'inside'); mkdirSync(inside)
+    process.env.NEX_EXPORT_DIR = inside
+    try {
+      expect((await call('export_update_set', { sys_id: SET, output: join(dir, 'outside.xml') })).text).toContain('output_invalid')
+      exportUpdateSet.mockResolvedValue(result)
+      expect((await call('export_update_set', { sys_id: SET, output: join(inside, 'ok.xml') })).isError).toBe(false)
+    } finally { delete process.env.NEX_EXPORT_DIR }
+    expect(exportUpdateSet).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a dangling link as existing, and replaces a link itself, never its target', async () => {
+    exportUpdateSet.mockResolvedValue(result)
+    const target = join(dir, 'target.xml'); writeFileSync(target, 'target')
+    const linked = join(dir, 'linked.xml'); symlinkSync(target, linked)
+    const dangling = join(dir, 'dangling.xml'); symlinkSync(join(dir, 'nowhere.xml'), dangling)
+    expect((await call('export_update_set', { sys_id: SET, output: dangling })).text).toContain('output_exists')
+    expect(readlinkSync(dangling)).toBe(join(dir, 'nowhere.xml'))
+    await call('export_update_set', { sys_id: SET, output: linked, replace: true })
+    expect(lstatSync(linked).isSymbolicLink()).toBe(false)
+    expect(readFileSync(target, 'utf8')).toBe('target')
+  })
+
+  it('refuses a directory in the way, or an unwritable directory, before copying anything', async () => {
+    const asDir = join(dir, 'taken.xml'); mkdirSync(asDir)
+    expect((await call('export_update_set', { sys_id: SET, output: asDir, replace: true })).text).toContain('output_invalid')
+    const locked = join(dir, 'locked'); mkdirSync(locked); chmodSync(locked, 0o500)
+    try {
+      expect((await call('export_update_set', { sys_id: SET, output: join(locked, 'x.xml') })).text).toContain('output_invalid')
+    } finally { chmodSync(locked, 0o700) }
+    expect(exportUpdateSet).not.toHaveBeenCalled()
+  })
+
+  it('leaves no temporary or partial file when the write fails', async () => {
+    exportUpdateSet.mockImplementation(async () => { chmodSync(dir, 0o500); return result })
+    try {
+      const { text } = await call('export_update_set', { sys_id: SET, output: join(dir, 'late.xml') })
+      expect(text).toMatch(/output_invalid|output_write_failed/)
+      expect(text).toContain('The export already ran on the instance')
+    } finally { chmodSync(dir, 0o700) }
+    expect(readdirSync(dir)).toEqual([])
   })
 
   it('replaces only when asked, and explains an incomplete set', async () => {

@@ -1400,7 +1400,6 @@ Make an In progress, non-Default update set the user's **working set**, as `nex 
 
 ```
 Working set changed (read back): FEAT-1234 New Catalog Item (3cc9f203531c9f90b6d61901a0490ed4); state: in progress; application: 921fd9af4c554457a73ad246c71a17f7
-Application: 921fd9af4c554457a73ad246c71a17f7
 Previous working set: application global, update set 9055f6338c9503100a22deb6dd2b4ead
 Restore it with restore_update_set (application, update_set) when the work is done.
 ```
@@ -1465,8 +1464,8 @@ Export an update set to an XML file on the machine running the server, as the pl
 |-----------|------|----------|---------|-------------|
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
 | `sys_id` | string | **Yes** | — | A `sys_update_set` or `sys_remote_update_set` sys_id. |
-| `output` | string | **Yes** | — | The file to write. Relative paths resolve against the server's working directory. |
-| `replace` | boolean | No | `false` | Replace an existing file. |
+| `output` | string | **Yes** | — | Absolute path ending in `.xml`, inside `NEX_EXPORT_DIR` when the server sets it. |
+| `replace` | boolean | No | `false` | Replace an existing regular file, or a link (the link itself, never its target). |
 | `include_incomplete` | boolean | No | `false` | Export a set that is not Complete, as a snapshot. |
 
 ### Example Output
@@ -1477,32 +1476,6 @@ Update set: FEAT-1234 New Catalog Item (3cc9...); state: complete
 Records: 12
 - FEAT-1234 New Catalog Item (3cc9...); complete; 12 record(s)
 Temporary copy 8f2a... removed by platform (read back).
-```
-
----
--------|------|----------|---------|-------------|
-| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
-| `name` | string | **Yes** | — | Name of the update set to set as current. |
-| `sys_id` | string | **Yes** | — | sys_id of the update set to set as current. |
-
-### Example Usage
-
-```json
-{
-  "name": "set_current_update_set",
-  "arguments": {
-    "instance": "myinstance",
-    "name": "FEAT-1234 New Catalog Item",
-    "sys_id": "new123def456789"
-  }
-}
-```
-
-### Example Output
-
-```
-Current update set changed to "FEAT-1234 New Catalog Item" (new123def456789).
-All subsequent changes will be captured in this update set.
 ```
 
 ---

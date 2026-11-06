@@ -1190,19 +1190,23 @@ Step 5: Group by field for breakdown
 
 #### Update Sets
 ```
-# Create a new update set for your changes
-→ create_update_set(name: "FEAT-1234 My Feature")
+# Create a set in the application you are changing
+→ create_update_set(name: "FEAT-1234 My Feature", application: "<sys_scope sys_id or global>")
 
-# Set it as current (all changes captured here)
-→ set_current_update_set(name: "FEAT-1234 My Feature", sys_id: "<us-id>")
+# Make it the working set; keep the previous working set it reports
+→ set_current_update_set(sys_id: "<us-id>")
 
 # Make changes...
 
-# Inspect what's in the update set
+# Review what was captured, then complete with that count
 → inspect_update_set(sys_id: "<us-id>")
+→ complete_update_set(sys_id: "<us-id>", expected_captures: <n>)
 
-# Clone for backup before deploying
-→ clone_update_set(source_sys_id: "<us-id>", new_name: "FEAT-1234 Backup")
+# Put the previous working set back
+→ restore_update_set(application: "<previous.application>", update_set: "<previous.updateSet>")
+
+# Ship it as XML (a file on this machine; the XML is never returned)
+→ export_update_set(sys_id: "<us-id>", output: "/work/exports/feat-1234.xml")
 ```
 
 #### Store Apps

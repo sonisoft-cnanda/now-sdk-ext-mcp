@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { constants } from "node:fs";
-import { access, link, lstat, open, rename, rm, stat } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { access, copyFile, link, lstat, open, realpath, rename, rm, stat } from "node:fs/promises";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   UpdateSetExportError,
@@ -50,7 +50,10 @@ export function setLine(set: UpdateSetSummary): string {
     `${set.isDefault ? "; Default" : ""}`;
 }
 
-const workingSetLine = (ws: WorkingSet) => `application ${clean(ws.application)}, update set ${clean(ws.updateSet)}`;
+/** A working set as the model should read it; an empty preference means the platform default (Global and its Default). */
+export const workingSetLine = (ws: WorkingSet) => ws.application || ws.updateSet
+  ? `application ${clean(ws.application) || '""'}, update set ${clean(ws.updateSet) || '""'}`
+  : 'none saved (the platform default: Global and its Default set); restore it by passing empty strings';
 
 function text(lines: string[]) {
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
@@ -58,7 +61,7 @@ function text(lines: string[]) {
 
 const WORKING_SET_REMEDIATION: Record<string, string> = {
   application_not_applied: "The set did not read back in the requested application. Inspect sys_update_set before retrying.",
-  application_not_found: "Name global, a sys_scope sys_id, or a scope name that matches exactly one active application.",
+  application_not_found: "The application was not found: pass global or the sys_scope sys_id reported as previous.application.",
   capture_count_mismatch:
     "The set holds a different number of captures than you reviewed (expected vs actual). List them again before completing.",
   capture_not_in_source: "The capture is not in the source set. Read sys_update_xml.update_set for it.",
@@ -102,16 +105,19 @@ const EXPORT_REMEDIATION: Record<string, string> = {
 };
 
 class OutputError extends Error {
-  constructor(public readonly code: "output_exists" | "output_invalid" | "output_write_failed") {
+  /** afterExport: the instance side already ran (and cleaned up); only the local file is missing. */
+  constructor(public readonly code: "output_exists" | "output_invalid" | "output_write_failed", public afterExport = false) {
     super(code);
   }
 }
 
 const OUTPUT_REMEDIATION: Record<string, string> = {
   output_exists: "The output file exists. Choose another path, or replace it only if the user asked to.",
-  output_invalid: "The directory does not exist or is not writable, or the path is a directory. Choose another path.",
+  output_invalid:
+    "The path must be absolute and end in .xml, inside NEX_EXPORT_DIR when that is set, in an existing writable directory, " +
+    "and (to replace) name a regular file. Choose another path.",
   output_write_failed:
-    "The export succeeded on the instance but the file could not be written (permissions, disk space or the filesystem). " +
+    "The export succeeded on the instance but the file could not be written (disk space or the filesystem). " +
     "Nothing was left on the instance; fix the location and export again.",
 };
 
@@ -137,6 +143,9 @@ export function workingSetErrorText(action: string, error: unknown) {
     if (EXPORT_REMEDIATION[error.code]) lines.push(EXPORT_REMEDIATION[error.code]);
   } else if (error instanceof OutputError) {
     lines.push(`Error (${action}): ${error.code}`, OUTPUT_REMEDIATION[error.code]);
+    if (error.afterExport && error.code !== "output_write_failed") {
+      lines.push("The export already ran on the instance and its temporary copy was cleaned up; no file was written. Export again.");
+    }
   } else if (isPolicyRefusal(error)) {
     lines.push(`Error (${action}): refused by policy: ${cleanMessage((error as Error).message)}`);
   } else {
@@ -161,9 +170,12 @@ export function registerRestoreUpdateSetTool(server: McpServer): void {
         instance: instanceParam,
         application: z
           .string()
-          .regex(/^(global|[0-9a-f]{32})$/)
-          .describe("previous.application from set_current_update_set: global or a sys_scope sys_id."),
-        update_set: sysId("previous.updateSet from set_current_update_set."),
+          .regex(/^(|global|[0-9a-f]{32})$/)
+          .describe('previous.application from set_current_update_set: global, a sys_scope sys_id, or "" when none was saved.'),
+        update_set: z
+          .string()
+          .regex(/^([0-9a-f]{32})?$/)
+          .describe('previous.updateSet from set_current_update_set: a sys_id, or "" when none was saved.'),
       },
     },
     async ({ instance, application, update_set }) => {
@@ -196,7 +208,8 @@ export function registerCompleteUpdateSetTool(server: McpServer): void {
         "Complete an In progress, non-Default update set after checking what it holds: the capture count must equal " +
         "expected_captures (the number you reviewed, e.g. with inspect_update_set), no other user may be working in it, " +
         "and every capture must belong to the set's application. The state is read back. A Complete set should not be " +
-        "reopened once another instance retrieved or exported it, so complete only when the work is done and reviewed.",
+        "reopened once another instance retrieved or exported it, so complete only when the work is done and reviewed. " +
+        "If it was the working set, put the previous one back with restore_update_set.",
       inputSchema: {
         instance: instanceParam,
         sys_id: sysId("The In progress, non-Default update set to complete."),
@@ -259,18 +272,35 @@ export function registerMoveUpdateSetCaptureTool(server: McpServer): void {
 }
 
 /**
- * Write the unload without ever leaving a partial file or replacing one unasked: a private temporary file in the
- * same directory, then a link (fails if the target exists) or, with replace, a rename.
+ * Where an export may go: an absolute path ending in .xml, inside NEX_EXPORT_DIR when that is set. The file holds
+ * instance-authored text (every payload), so it must not land on a dotfile, a key file or a script by mistake or by an
+ * injected instruction; and a replace may only replace a regular .xml file (or a link, which is replaced, not followed).
+ * Checked before the instance copies anything, and again just before the write.
  */
-async function writeExport(output: string, xml: string, replace: boolean): Promise<{ path: string; bytes: number }> {
-  if (/[/\\]$/.test(output)) throw new OutputError("output_invalid");
+async function checkOutput(output: string, replace: boolean): Promise<string> {
+  if (!isAbsolute(output) || /[/\\]$/.test(output) || extname(output).toLowerCase() !== ".xml") throw new OutputError("output_invalid");
   const path = resolve(output);
+  const root = process.env.NEX_EXPORT_DIR;
+  if (root) {
+    const within = relative(await realpath(resolve(root)).catch(() => resolve(root)), await realpath(dirname(path)).catch(() => dirname(path)));
+    if (within.startsWith("..") || isAbsolute(within)) throw new OutputError("output_invalid");
+  }
   const parent = await stat(dirname(path)).catch(() => undefined);
   if (!parent?.isDirectory()) throw new OutputError("output_invalid");
   if (!(await access(dirname(path), constants.W_OK).then(() => true, () => false))) throw new OutputError("output_invalid");
   const existing = await lstat(path).catch(() => undefined);
-  if (existing?.isDirectory()) throw new OutputError("output_invalid");
   if (existing && !replace) throw new OutputError("output_exists");
+  if (existing && !existing.isFile() && !existing.isSymbolicLink()) throw new OutputError("output_invalid");
+  return path;
+}
+
+/**
+ * Write the unload without ever leaving a partial file or replacing one unasked: a private temporary file in the
+ * same directory, then a hard link (fails if the target exists; a copy that refuses an existing target where links are
+ * not supported) or, with replace, a rename (which replaces a link itself, never its target).
+ */
+async function writeExport(output: string, xml: string, replace: boolean): Promise<{ path: string; bytes: number }> {
+  const path = await checkOutput(output, replace);
   const temporary = join(dirname(path), `.${basename(path)}.${randomBytes(6).toString("hex")}.tmp`);
   try {
     // 0600: the unload holds every record's full payload.
@@ -281,12 +311,20 @@ async function writeExport(output: string, xml: string, replace: boolean): Promi
     } finally {
       await handle.close();
     }
-    if (replace) await rename(temporary, path);
-    else await link(temporary, path).then(() => rm(temporary, { force: true }));
+    if (replace) {
+      await rename(temporary, path);
+    } else {
+      await link(temporary, path).catch(async (error: NodeJS.ErrnoException) => {
+        if (error?.code !== "EPERM" && error?.code !== "ENOTSUP" && error?.code !== "EXDEV") throw error;
+        await copyFile(temporary, path, constants.COPYFILE_EXCL);
+      });
+    }
   } catch (error) {
-    await rm(temporary, { force: true }).catch(() => undefined);
     if ((error as NodeJS.ErrnoException)?.code === "EEXIST") throw new OutputError("output_exists");
     throw new OutputError("output_write_failed");
+  } finally {
+    // Gone whether the write succeeded or not; failing to remove it does not undo a written export.
+    await rm(temporary, { force: true }).catch(() => undefined);
   }
   return { path, bytes: Buffer.byteLength(xml, "utf8") };
 }
@@ -309,7 +347,7 @@ export function registerExportUpdateSetTool(server: McpServer): void {
         output: z
           .string()
           .min(1)
-          .describe("The file to write, e.g. /work/exports/my_set.xml. A relative path resolves against the server's working directory."),
+          .describe("Absolute path of the .xml file to write, e.g. /work/exports/my_set.xml (inside NEX_EXPORT_DIR when the server sets one)."),
         replace: z.boolean().optional().describe("Replace the output file if it exists. Only when the user asked to."),
         include_incomplete: z
           .boolean()
@@ -320,17 +358,17 @@ export function registerExportUpdateSetTool(server: McpServer): void {
     async ({ instance, sys_id, output, replace, include_incomplete }) => {
       try {
         // Refuse a bad output before anything is copied on the instance.
-        const path = resolve(output);
-        const parent = await stat(dirname(path)).catch(() => undefined);
-        if (/[/\\]$/.test(output) || !parent?.isDirectory()) throw new OutputError("output_invalid");
-        if (!replace && (await lstat(path).catch(() => undefined))) throw new OutputError("output_exists");
+        await checkOutput(output, replace === true);
 
         const result = await withConnectionRetry(
           instance,
           (sn) => new UpdateSetExporter(sn).exportUpdateSet(sys_id, { includeIncomplete: include_incomplete === true }),
           NO_RETRY
         );
-        const written = await writeExport(output, result.xml, replace === true);
+        const written = await writeExport(output, result.xml, replace === true).catch((error: unknown) => {
+          if (error instanceof OutputError) error.afterExport = true;
+          throw error;
+        });
         const lines = [
           `Exported ${result.kind === "batch" ? "a batch" : "an update set"} (${result.source}) to ${written.path} (${written.bytes} bytes).`,
           `Update set: ${clean(result.updateSet.name)} (${result.updateSet.sysId}); state: ${clean(result.updateSet.state)}`,
