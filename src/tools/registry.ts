@@ -43,6 +43,15 @@ import {
 } from "../tools/workflow-read.js";
 import { registerRepairStoreAppTool } from "../tools/store-repair.js";
 import { registerGetFlowDefinitionTool, registerSendFlowMessageTool } from "../tools/flow-design.js";
+import {
+  registerDebugFlowBreakpointsTool,
+  registerDebugFlowCancelTool,
+  registerDebugFlowInspectTool,
+  registerDebugFlowRunToTool,
+  registerDebugFlowStartTool,
+  registerDebugFlowStepTool,
+  registerListFlowDebugSessionsTool,
+} from "../tools/flow-debug.js";
 import { registerKillTransactionTool, registerListTransactionsTool } from "../tools/transactions.js";
 import {
   registerAddAclRoleTool,
@@ -232,6 +241,14 @@ export const TOOL_REGISTRY: Record<string, ToolRegistrar> = {
   // ---- flow design and messages
   get_flow_definition: registerGetFlowDefinitionTool,
   send_flow_message: registerSendFlowMessageTool,
+  // ---- flow debugger (Workflow Studio Test > Debug)
+  debug_flow_breakpoints: registerDebugFlowBreakpointsTool,
+  debug_flow_cancel: registerDebugFlowCancelTool,
+  debug_flow_inspect: registerDebugFlowInspectTool,
+  debug_flow_run_to: registerDebugFlowRunToTool,
+  debug_flow_start: registerDebugFlowStartTool,
+  debug_flow_step: registerDebugFlowStepTool,
+  list_flow_debug_sessions: registerListFlowDebugSessionsTool,
   // ---- cluster transactions
   kill_transaction: registerKillTransactionTool,
   list_transactions: registerListTransactionsTool,

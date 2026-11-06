@@ -33,6 +33,17 @@ export interface ToolPackage {
     tools: string[];
 }
 
+/** Workflow Studio's debugger: start, step, inspect and end a debug run. */
+const FLOW_DEBUG_TOOLS = [
+    "debug_flow_start",
+    "debug_flow_run_to",
+    "debug_flow_step",
+    "debug_flow_inspect",
+    "debug_flow_breakpoints",
+    "debug_flow_cancel",
+    "list_flow_debug_sessions",
+];
+
 /** Legacy workflows: find, read, outline, validate and plan the move to Flow Designer. Only validate stores anything (its report). */
 const WORKFLOW_READ_TOOLS = [
     "list_workflows",
@@ -206,7 +217,8 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
     change_manager: {
         description:
             "Change and release work: change approvals, update sets, flows and " +
-            "workflows, and the app repo.",
+            "workflows (including running flows and sending flow messages, which need " +
+            "execute), and the app repo.",
         tools: [
             "find_task",
             "query_table",
@@ -263,6 +275,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "get_flow_logs",
             "get_flow_definition",
             "send_flow_message",
+            ...FLOW_DEBUG_TOOLS,
             // Porting a legacy workflow to Flow Designer starts from reading and planning it.
             ...WORKFLOW_READ_TOOLS,
             "query_table",

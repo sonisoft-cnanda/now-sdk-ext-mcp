@@ -54,7 +54,7 @@ session.
 | `developer` | Scripts, schema, table behavior, source sync, update sets, scope, ACLs, logs, code search. |
 | `service_desk` | Tickets, knowledge, catalog requests. No scripting or schema. |
 | `admin` | Users and groups, ACLs, plugins, health, app lifecycle (including repair), scripting. |
-| `change_manager` | Change approvals, update sets, flows and workflows (including the legacy workflow tools), app repo. |
+| `change_manager` | Change approvals, update sets, flows and workflows (including the legacy workflow tools, and running flows and sending flow messages, which need `execute`), app repo. |
 | `flow_developer` | Flow Designer end to end, plus what is needed to debug flows. |
 
 Names can be **comma-separated**, which takes the **union**: `developer,flow_developer`.
@@ -3272,7 +3272,7 @@ Groups returned: 4
 
 ## list_transactions
 
-List the transactions running now on every responding cluster node (Active Transactions, All Nodes): user, age, type, state, query count and URL. URLs are shown without query or matrix (`;`) values or fragment (other users' requests can carry tokens there); the path itself is kept, so a secret placed in a path segment would still show. The rows are fenced as data and cut at 80,000 characters. The nodes are asked to report and then polled, so this can take a few seconds; polling stops if the client cancels.
+List the transactions running now on every responding cluster node (Active Transactions, All Nodes): user, age, type, state, query count and URL. URLs are shown without query or matrix (`;`) values or fragment (other users' requests can carry tokens there); the path itself is kept, as are keys without a value and matrix parameters without `=`, so a secret placed there would still show. The rows are fenced as data and cut at 80,000 characters. The nodes are asked to report and then polled, so this can take a few seconds; polling stops if the client cancels.
 
 ### Parameters
 
@@ -4026,6 +4026,37 @@ Send a message to a paused execution waiting in a Wait For Message step, which r
 | `message` | string | **Yes** | — | The message the step waits for. No line breaks. |
 | `payload` | string | No | — | Passed with the message, on one line (for example minified JSON). |
 | `scope` | string | No | global | The scope to run the sending script in. |
+
+---
+
+## Flow debugger
+
+Workflow Studio's **Test > Debug**, as `nex flow debug` drives it. A debug run executes the flow's current draft **for real**: records it creates or changes are kept, so debug a copy (`copy_flow`) in a scratch app. A run is addressed by its root context id; nothing is held in the server, and `list_flow_debug_sessions` finds runs left open. Every run must be ended: run it to the end, or `debug_flow_cancel`.
+
+Starting and stepping need `execute` as well as `write`; breakpoints and cancel need only `write`, so a run can still be cancelled under `NEX_POLICY_DENY=execute`. Calls that move a run are never replayed after a transport error. A wait defaults to 45 seconds, under the 60-second request timeout many clients use; `debug_flow_run_to` waits more than once, so its `timeout_seconds` (default 30) is for the whole call and is split across its waits. A client that gives up first leaves the run open: find it with `list_flow_debug_sessions`. Run data (names, step labels, inputs and outputs) is fenced as data and redacted; values over 200 characters are cut unless `full`.
+
+| Tool | Does | Needs |
+|------|------|-------|
+| `debug_flow_start` | Start a run (`flow`: sys_id or `scope.internal_name`; `inputs`; optional `breakpoints` by step number) and leave it paused before its first step. Returns the context id, the steps it can stop at, and where it is. | execute, write |
+| `debug_flow_run_to` | Start, run to the first of `breakpoints`, report every step's inputs and outputs there (or say the run never reached one), then `after`: `cancel` (default), `resume` to the end, or `stay` paused. | execute, write |
+| `debug_flow_step` | Move a paused run: `over` (default), `into` a subflow (later calls apply to its child context), `out`, `resume`, or `skip_all`. | execute, write |
+| `debug_flow_inspect` | Without moving it: `snapshot` (default), `steps` (every step's inputs and outputs, or one `step`), `locations`, or `breakpoints`. | read |
+| `debug_flow_breakpoints` | Exactly one change: `set`, `add` and/or `remove` (not the same step in both), or `clear`. Steps are checked against the debugger's own list; an invalid one is refused with the valid steps. | write |
+| `debug_flow_cancel` | End the run and any subflow it stepped into, and read it back. Safe to repeat; refuses a context the debugger did not start, so it cannot end a real flow run. | write |
+| `list_flow_debug_sessions` | Runs still open (paused, waiting or running), newest first; optional `created_by` and `limit`. | read |
+
+### Example: one call
+
+```json
+{
+  "name": "debug_flow_run_to",
+  "arguments": {
+    "flow": "x_myapp.create_task_copy",
+    "inputs": { "table": "incident", "field_values": "short_description=Debug" },
+    "breakpoints": [3]
+  }
+}
+```
 
 ---
 

@@ -28,7 +28,7 @@ export function urlWithoutValues(url: string): string {
   return url.replace(/#.*$/s, "").replace(/([?&;][^=&#;?]*)=[^&#;?]*/g, "$1=…");
 }
 
-/** Messages core throws before the kill request is sent. */
+/** Messages core (as of 6.18.7) throws before the kill request is sent. A rewording falls back to "may have been sent". */
 const NOT_SENT = /Kill action is unavailable|session token is required|Could not uniquely resolve the Kill UI action|must be a 32-character/;
 
 const errorLine = (action: string, error: unknown): string =>

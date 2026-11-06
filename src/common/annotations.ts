@@ -176,6 +176,17 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // background script, so it needs execute as well as write.
     send_flow_message: ARBITRARY,
 
+    // ---- flow debugger. A debug run executes the flow's draft for real, so starting and stepping run
+    // author logic (execute+write). Breakpoints and cancel need only write, so a run stays cancellable
+    // under NEX_POLICY_DENY=execute; cancel is safe to repeat.
+    debug_flow_start: ARBITRARY,
+    debug_flow_run_to: ARBITRARY,
+    debug_flow_step: ARBITRARY,
+    debug_flow_breakpoints: SET,
+    debug_flow_cancel: OVERWRITE,
+    debug_flow_inspect: READ,
+    list_flow_debug_sessions: READ,
+
     // ---- cluster transactions. Listing asks the nodes to report (a GET of loading_transactions.do,
     // then status polls core declares read-only).
     list_transactions: READ,
