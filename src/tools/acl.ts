@@ -22,9 +22,10 @@ import { annotationsFor } from "../common/annotations.js";
  * Access controls (sys_security_acl) and role elevation.
  *
  * Changing an ACL needs the elevated security_admin role. Elevation belongs to one server
- * session, so the write tools run on an instance that elevates every session as it logs in,
- * cached apart from the plain one: no other tool ever runs elevated. Reads need no elevation;
- * `elevate: true` on a read only shows the role names hidden until then (security_admin).
+ * session, so a tool that elevates runs on an instance that elevates every session as it logs in,
+ * cached apart from the plain one. The write tools always elevate; get_role_elevation, list_acls
+ * and get_acl elevate only with `elevate` (which on a read shows the role names hidden until then).
+ * No other tool runs elevated.
  */
 
 const SECURITY_ADMIN = ["security_admin"];
@@ -503,7 +504,8 @@ export function registerAddAclRoleTool(server: McpServer): void {
       annotations: annotationsFor("add_acl_role"),
       title: "Add ACL Role",
       description:
-        "Add a role to an access control: users with that role then pass it (roles are alternatives). " + SECURITY_CHANGE +
+        "Add a role to an access control: users with that role then pass its role check (roles are alternatives), " +
+        "and reach any script the ACL has. " + SECURITY_CHANGE +
         " To swap a role, add the new one before removing the old.",
       inputSchema: {
         instance: instanceParam,
@@ -535,8 +537,8 @@ export function registerRemoveAclRoleTool(server: McpServer): void {
       title: "Remove ACL Role",
       description:
         "Remove a role from an access control. " + SECURITY_CHANGE + " Removing the last role makes the platform put " +
-        "snc_internal back, which lets every internal user pass (and run any script the ACL has): add the intended role " +
-        "first. Never remove a role shown " +
+        "snc_internal back, which lets every internal user past the role check, so any script on the ACL then runs for " +
+        "them: add the intended role first. Never remove a role shown " +
         "only as a sys_id (hidden): its name is unknown to this session.",
       inputSchema: {
         instance: instanceParam,

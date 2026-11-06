@@ -1644,7 +1644,7 @@ Delete an access control and its role rows (each captured as a DELETE). Prefer `
 
 ## add_acl_role
 
-Add a role to an access control: users with that role then pass it. To swap a role, add the new one before removing the old.
+Add a role to an access control: users with that role then pass its role check, and reach any script the ACL has. To swap a role, add the new one before removing the old.
 
 > **Warning:** A security change. Tell the user who gains or loses access and get their go-ahead first. The tool elevates its own session to `security_admin` (cached apart: no other tool runs elevated) and writes into the named update set, verifying each write.
 
@@ -1664,7 +1664,7 @@ Add a role to an access control: users with that role then pass it. To swap a ro
 
 ## remove_acl_role
 
-Remove a role from an access control. Removing the last role makes the platform put `snc_internal` back, which lets every internal user pass: add the intended role first. Never remove a role shown only as a sys_id.
+Remove a role from an access control. Removing the last role makes the platform put `snc_internal` back, which lets every internal user past the role check, so any script on the ACL then runs for them: add the intended role first. Never remove a role shown only as a sys_id.
 
 > **Warning:** A security change. Tell the user who gains or loses access and get their go-ahead first. The tool elevates its own session to `security_admin` (cached apart: no other tool runs elevated) and writes into the named update set, verifying each write.
 

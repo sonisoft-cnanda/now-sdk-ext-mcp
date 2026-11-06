@@ -386,8 +386,8 @@ instance the session stays elevated until its idle timeout.
 Code on an ACL (a script, or a `javascript:` condition) runs on the instance at every check, so
 writing it also needs `execute`. `NEX_POLICY_DENY=execute` allows role-only ACL changes and refuses
 ones that carry code, or that make existing code run where it did not (switching on, changing the
-operation, turning admin overrides off). Role changes stay plain writes, although removing an ACL's
-last role brings `snc_internal` back and so changes who runs its existing code.
+operation, turning admin overrides off). Role changes stay plain writes, although adding a role, or
+removing the last one (which brings `snc_internal` back), changes who reaches the ACL's existing code.
 
 A user may elevate to `security_admin` only when it is assigned to them; in the base system only
 the `admin` user has it. The ACL write tools need an `update_set`, so a security change is never
