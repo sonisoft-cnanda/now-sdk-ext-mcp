@@ -53,18 +53,19 @@ const inputsParam = z
       "sent as Workflow Studio sends it). For a flow, its trigger outputs (e.g. current, table_name)."
   );
 const stepsParam = z.array(z.number().int().min(1).max(10_000)).min(1).max(50);
+const LEFT_OPEN = "A client that gives up first leaves the run open: find it with list_flow_debug_sessions.";
 const timeoutParam = z
   .number()
   .int()
   .min(1)
   .max(300)
   .optional()
-  .describe(
-    "Seconds to wait for the run to pause again or end. Default 45, under the 60-second request timeout many MCP clients " +
-      "use: a client that gives up first leaves the run open without telling you its state."
-  );
+  .describe(`Seconds to wait for the run to pause again or end. Default 45, under the 60-second request timeout many MCP clients use. ${LEFT_OPEN}`);
 // Under the common 60 s client request timeout, so the answer arrives before the client gives up on it.
 const DEFAULT_WAIT_S = 45;
+// run_to waits more than once (start, the breakpoint, and with resume the end; a cancel then settles for up to
+// ~18 s), so its budget is for the whole call and is split across the waits.
+const DEFAULT_RUN_TO_S = 30;
 const fullParam = z.boolean().optional().describe("Show values in full, and the engine's internal outputs (__action_status__ and the like).");
 
 const REMEDIATION: Record<string, string> = {
@@ -143,11 +144,11 @@ function hints(snapshot: FlowDebugSnapshot): string[] {
 }
 
 /** Where the run is: tool-written status lines, then the run's data (names, labels, values) fenced as data. */
-function snapshotLines(snapshot: FlowDebugSnapshot, full: boolean): string[] {
+function snapshotLines(snapshot: FlowDebugSnapshot, full: boolean, allSteps = false): string[] {
   const depth = snapshot.chain.length - 1;
   const state = snapshot.state === "PAUSED" ? `PAUSED at line ${snapshot.pausedLines.join(", ") || "?"}` : snapshot.state;
   const head = [
-    `Run ${snapshot.rootContextId}: ${state}${depth > 0 ? ` in child subflow context ${snapshot.contextId} (depth ${depth})` : ""}` +
+    `Run ${clean(snapshot.rootContextId)}: ${state}${depth > 0 ? ` in child subflow context ${clean(snapshot.contextId)} (depth ${depth})` : ""}` +
       `${snapshot.timedOut ? " (still running when the wait timed out)" : ""}`,
   ];
   const body = [`${clean(snapshot.flowName)}${snapshot.pausedAt ? `: paused at ${where(snapshot.pausedAt)}` : ""}`];
@@ -158,16 +159,38 @@ function snapshotLines(snapshot: FlowDebugSnapshot, full: boolean): string[] {
     const error = step.error && step.error !== "Success" ? ` ! ${clean(step.error)}` : "";
     body.push(`- ${number} ${clean(step.state)}${time}: ${clean(step.step?.label ?? step.reportKey)}${error}`);
   }
-  const paused = snapshot.state === "PAUSED" ? pausedStep(snapshot) : undefined;
-  if (paused) body.push(...stepLines(paused, full, "Paused step"));
+  if (allSteps) {
+    // Every step's inputs and outputs: what run_to returns, since a cancelled run cannot be inspected afterwards.
+    for (const step of snapshot.steps) body.push(...stepLines(step, full));
+  } else {
+    const paused = snapshot.state === "PAUSED" ? pausedStep(snapshot) : undefined;
+    if (paused) body.push(...stepLines(paused, full, "Paused step"));
+  }
   return [...head, dataBlock(body.join("\n"), "Debug run data", "without full")];
 }
 
-function sessionLines(session: FlowDebugSession, full: boolean): string[] {
+/** The run's flow, where it can stop and its breakpoints: instance text, so fenced. */
+function flowLines(session: FlowDebugSession): string {
+  return dataBlock(
+    [`${clean(session.flow.name)} (${clean(session.flow.scope)})`, ...locationLines(session.locations), ...breakpointLines(session.breakpoints)].join("\n"),
+    "Flow steps",
+    "one view at a time"
+  );
+}
+
+/** Core sets start's breakpoints only once the run has paused; say so when they were asked for and not set. */
+function unsetBreakpoints(session: FlowDebugSession, requested: number[] | undefined): string[] {
+  return requested?.length && session.breakpoints.length === 0
+    ? [`Breakpoints were not set: the run had not paused (${session.snapshot.state}) when the wait ended.`]
+    : [];
+}
+
+function sessionLines(session: FlowDebugSession, full: boolean, requested?: number[]): string[] {
   return [
-    `Debug run ${session.contextId} of ${session.flow.type} ${clean(session.flow.sysId)} (${clean(session.flow.scope)})`,
+    `Debug run ${clean(session.contextId)} of ${session.flow.type} ${clean(session.flow.sysId)}`,
     WARNING,
-    dataBlock([clean(session.flow.name), ...locationLines(session.locations), ...breakpointLines(session.breakpoints)].join("\n"), "Flow steps", "one view at a time"),
+    flowLines(session),
+    ...unsetBreakpoints(session, requested),
     ...snapshotLines(session.snapshot, full),
     ...hints(session.snapshot),
   ];
@@ -243,7 +266,7 @@ export function registerDebugFlowStartTool(server: McpServer): void {
             }),
           { retry: false }
         );
-        return text(sessionLines(session, full === true));
+        return text(sessionLines(session, full === true, breakpoints));
       } catch (error) {
         return failure("debug_flow_start", error, true);
       }
@@ -259,16 +282,25 @@ export function registerDebugFlowRunToTool(server: McpServer): void {
       title: "Debug Flow To Breakpoint",
       description:
         "Debug a flow or subflow to a breakpoint in one call: start it, run to the first of the breakpoints, report every " +
-        "step's data there, then (by default) cancel it so nothing is left open. after resume lets it run on to the end, " +
-        "ignoring the other breakpoints; after stay leaves it paused for debug_flow_step. The run is real: records it " +
-        "creates or changes are kept. Only when the user asked to debug.",
+        "step's inputs and outputs there, then (by default) cancel it so nothing is left open. after resume lets it run on " +
+        "to the end, ignoring the other breakpoints; after stay leaves it paused for debug_flow_step. The run is real: " +
+        "records it creates or changes are kept. Only when the user asked to debug.",
       inputSchema: {
         instance: instanceParam,
         flow: flowParam,
         inputs: inputsParam,
         breakpoints: stepsParam.describe("Steps to break at, by the number Workflow Studio shows. The run stops at the first one reached."),
         after: z.enum(["cancel", "resume", "stay"]).optional().describe("After the breakpoint: cancel (default), resume to the end, or stay paused."),
-        timeout_seconds: timeoutParam,
+        timeout_seconds: z
+          .number()
+          .int()
+          .min(3)
+          .max(300)
+          .optional()
+          .describe(
+            "Seconds for the whole call, split across its waits (start, the breakpoint, and with resume the end). Default 30, " +
+              `so a cancel's settling still fits under a 60-second client timeout. ${LEFT_OPEN}`
+          ),
         full: fullParam,
       },
     },
@@ -282,22 +314,32 @@ export function registerDebugFlowRunToTool(server: McpServer): void {
               inputs: inputs ?? {},
               breakpoints: breakpoints as FlowDebugStepRef[],
               after: after ?? "cancel",
-              timeoutMs: (timeout_seconds ?? DEFAULT_WAIT_S) * 1000,
+              timeoutMs: Math.floor(((timeout_seconds ?? DEFAULT_RUN_TO_S) * 1000) / (after === "resume" ? 3 : 2)),
             }),
           { retry: false }
         );
+        // Core's snapshot is the run at the breakpoint, or where it ended if it never reached one.
+        const at = result.snapshot.state === "PAUSED" && breakpoints.includes(result.snapshot.pausedAt?.step?.number ?? -1);
         const lines = [
-          `Debug run ${result.session.contextId} of ${result.session.flow.type} ${clean(result.session.flow.sysId)}`,
+          `Debug run ${clean(result.session.contextId)} of ${result.session.flow.type} ${clean(result.session.flow.sysId)}`,
           WARNING,
-          "At the breakpoint:",
-          ...snapshotLines(result.snapshot, full === true),
+          ...unsetBreakpoints(result.session, breakpoints),
+          at ? "At the breakpoint:" : "The run did not reach a breakpoint:",
+          ...snapshotLines(result.snapshot, full === true, true),
         ];
-        if (result.final) lines.push("After resuming:", ...snapshotLines(result.final, false), ...hints(result.final));
-        else if (!result.cancel) lines.push(...hints(result.snapshot));
+        // When the run had already ended, core returns the same snapshot as final.
+        if (result.final && result.final !== result.snapshot) {
+          lines.push("After resuming:", ...snapshotLines(result.final, full === true), ...hints(result.final));
+        } else if (!result.cancel) {
+          lines.push(...hints(result.final ?? result.snapshot));
+        }
         if (result.cancel) lines.push(cancelLine(result.cancel));
         return text(lines);
       } catch (error) {
-        return failure("debug_flow_run_to", error, true);
+        const failed = failure("debug_flow_run_to", error, true);
+        // runTo cancels the run when it fails after starting it (best effort).
+        if (!isPolicyRefusal(error)) failed.content[0].text += "\nrun_to cancels its run when it fails; confirm with list_flow_debug_sessions.";
+        return failed;
       }
     }
   );
@@ -412,6 +454,9 @@ export function registerDebugFlowBreakpointsTool(server: McpServer): void {
     },
     async ({ instance, context_id, set, add, remove, clear }) => {
       const modes = [set !== undefined, clear === true, add !== undefined || remove !== undefined].filter(Boolean).length;
+      if (add?.some((step) => remove?.includes(step))) {
+        return { ...text(["Error (debug_flow_breakpoints): a step cannot be both added and removed. Nothing was sent."]), isError: true };
+      }
       if (modes !== 1) {
         return { ...text(["Error (debug_flow_breakpoints): give exactly one change: replace, add and/or remove, or clear. Nothing was sent."]), isError: true };
       }
@@ -467,7 +512,7 @@ export function registerListFlowDebugSessionsTool(server: McpServer): void {
         "flow context open: find it here and end it with debug_flow_cancel.",
       inputSchema: {
         instance: instanceParam,
-        created_by: z.string().regex(/^[^\p{Cc}^]{1,100}$/u).optional().describe("Only runs started by this user name."),
+        created_by: z.string().regex(/^[a-z0-9_.@+-]{1,100}$/i, "a user name").optional().describe("Only runs started by this user name."),
         limit: z.number().int().min(1).max(500).optional().describe("At most this many. Default 50."),
       },
     },
@@ -477,11 +522,12 @@ export function registerListFlowDebugSessionsTool(server: McpServer): void {
           new FlowDebugger(sn).listSessions({ ...(created_by ? { createdBy: created_by } : {}), limit: limit ?? 50 })
         );
         if (sessions.length === 0) return text(["No open debug runs."]);
+        const rows = sessions.map(
+          (s) => `- ${clean(s.contextId)} ${clean(s.state)} since ${clean(s.createdOn)} by ${clean(s.createdBy)}: ${clean(s.flowName)}`
+        );
         return text([
           `${sessions.length} open debug run(s), newest first:`,
-          ...sessions.map(
-            (s) => `- ${clean(s.contextId)} ${clean(s.state)} since ${clean(s.createdOn)} by ${clean(s.createdBy)}: ${clean(s.flowName)}`
-          ),
+          dataBlock(rows.join("\n"), "Open debug runs", "a lower limit or created_by"),
           "End one with debug_flow_cancel.",
         ]);
       } catch (error) {
