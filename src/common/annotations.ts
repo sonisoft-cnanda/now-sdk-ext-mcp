@@ -228,6 +228,22 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     close_incident: SET,
     approve_change: SET,
 
+    // ---- legacy workflows: reads, except validation. validate_workflow renders the editor's report
+    // page, which saves that run's results over the previous run's. Core classifies the request as a
+    // read and no workflow configuration changes, but it does store something, so it is a settling
+    // write here and stays out of the readonly package. (get_workflow's editor status comes from the
+    // diagram processor, a plain read.)
+    list_workflows: READ,
+    get_workflow: READ,
+    outline_workflow: READ,
+    export_workflow: READ,
+    convert_workflow: READ,
+    validate_workflow: SET,
+    list_workflow_activity_types: READ,
+    // Reinstalls an installed application from the repository: like an install, it can replace
+    // what is there and repeating does not settle.
+    repair_store_app: OVERWRITE_ONCE,
+
     // ---- application metadata, through the platform's forms; every write is read back with its
     // capture. Inserting adds; updating and the layout saves overwrite what was there (a repeat
     // settles); deletes and removals lose data and a repeat is refused. Code (a script, a server

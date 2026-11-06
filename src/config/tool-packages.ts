@@ -33,6 +33,17 @@ export interface ToolPackage {
     tools: string[];
 }
 
+/** Legacy workflows, read-only: find, read, outline, validate and plan the move to Flow Designer. */
+const WORKFLOW_READ_TOOLS = [
+    "list_workflows",
+    "get_workflow",
+    "outline_workflow",
+    "export_workflow",
+    "convert_workflow",
+    "validate_workflow",
+    "list_workflow_activity_types",
+];
+
 /** Application metadata through the platform's forms: records, columns, choices, form and list layouts. */
 const METADATA_TOOLS = [
     "insert_metadata_record",
@@ -173,6 +184,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "validate_app_install",
             "install_store_app",
             "update_store_app",
+            "repair_store_app",
             ...ACL_TOOLS,
             // Pending NEX-38.
             "find_user",
@@ -215,6 +227,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "get_flow_logs",
             "cancel_flow",
             "create_workflow",
+            ...WORKFLOW_READ_TOOLS,
             "install_from_app_repo",
             "publish_to_app_repo",
             // Pending NEX-39 and NEX-46.
@@ -243,6 +256,8 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "get_flow_error",
             "get_flow_execution_details",
             "get_flow_logs",
+            // Porting a legacy workflow to Flow Designer starts from reading and planning it.
+            ...WORKFLOW_READ_TOOLS,
             "query_table",
             "query_syslog",
             "discover_table_schema",

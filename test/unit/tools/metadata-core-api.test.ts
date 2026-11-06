@@ -5,7 +5,7 @@
 import { describe, expect, it } from '@jest/globals'
 import * as core from '@sonisoft/now-sdk-ext-core'
 
-const { stripMarkup } = await import('../../../src/tools/metadata.js')
+const { stripMarkup } = await import('../../../src/common/tool-text.js')
 
 const methods: Record<string, string[]> = {
   MetadataFormWriter: ['insert', 'update', 'delete'],
