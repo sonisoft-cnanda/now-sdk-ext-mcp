@@ -16,6 +16,9 @@ interface CacheEntry {
 /** Cache TTL — 30 minutes. ServiceNow sessions typically expire after idle time. */
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
+/** An elevated instance is rebuilt sooner: a shorter window in which a cached connection holds the role. */
+const ELEVATED_CACHE_TTL_MS = 10 * 60 * 1000;
+
 const instanceCache = new Map<string, CacheEntry>();
 
 /** How a tool wants its connection: plain, or elevated to roles (e.g. security_admin) at every login. */
@@ -71,7 +74,7 @@ export async function getServiceNowInstance(
   const cached = instanceCache.get(key);
   if (cached) {
     const age = Date.now() - cached.createdAt;
-    if (age < CACHE_TTL_MS) {
+    if (age < (key === resolvedAlias ? CACHE_TTL_MS : ELEVATED_CACHE_TTL_MS)) {
       return cached.instance;
     }
     // TTL expired — evict and create fresh

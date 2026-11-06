@@ -1517,7 +1517,7 @@ The elevated privilege roles (e.g. `security_admin`) the user may elevate to, as
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
-| `elevate` | string[] | No | — | Roles to elevate to and prove, e.g. `["security_admin"]`. |
+| `elevate` | string[] | No | — | 1 to 5 roles to elevate to and prove, e.g. `["security_admin"]`. |
 
 ### Example Output
 
@@ -1542,14 +1542,14 @@ Create an access control. With `roles`, the ACL is inserted inactive, given its 
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
 | `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
 | `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
-| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `update_set` | string | **Yes** | — | sys_id of an In progress update set of that application (`create_update_set`). Every write is captured there and verified; the user's current set is untouched. |
 | `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
 | `operation` | string | **Yes** | — | `read`, `write`, `create`, `delete`, `execute`, ... |
 | `type` | string | No | `record` | sys_security_type name. |
 | `table` | string | Record ACLs | — | The table. |
 | `field` | string | No | — | The field, or `*` for every field. Omit for the table itself. |
 | `name` | string | Other types | — | The resource name (UI page, REST endpoint, script include, ...). |
-| `roles` | string[] | No | — | Role names; any one of them passes. |
+| `roles` | string[] | No | — | Role names; any one of them passes. Omit (not `[]`) for an ACL decided by its condition or script alone. |
 | `active` | boolean | No | `true` | `false` creates it inactive. |
 | `condition` | string | No | — | Encoded query condition the record must meet. |
 | `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. |
@@ -1610,14 +1610,14 @@ Change an access control's fields. Roles change through `add_acl_role` / `remove
 | `sys_id` | string | **Yes** | — | The ACL's sys_id. |
 | `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
 | `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
-| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `update_set` | string | **Yes** | — | sys_id of an In progress update set of that application (`create_update_set`). Every write is captured there and verified; the user's current set is untouched. |
 | `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
 | `operation` | string | No | — | Operation name. |
 | `active` | boolean | No | — | Activate or deactivate. |
 | `condition` | string | No | — | Encoded query condition the record must meet. |
 | `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. |
-| `admin_overrides` | boolean | No | `true` on create | Whether admin passes regardless. |
-| `decision_type` | `allow` \| `deny` | No | `allow` | Deny-Unless ACLs are checked first and grant nothing alone. |
+| `admin_overrides` | boolean | No | — | Whether admin passes regardless. |
+| `decision_type` | `allow` \| `deny` | No | — | Deny-Unless ACLs are checked first and grant nothing alone. |
 | `description` | string | No | — | The platform may write its own on first save. |
 
 ---
@@ -1637,7 +1637,7 @@ Delete an access control and its role rows (each captured as a DELETE). Prefer `
 | `confirm` | string | **Yes** | — | The ACL's sys_id again, exactly. |
 | `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
 | `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
-| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `update_set` | string | **Yes** | — | sys_id of an In progress update set of that application (`create_update_set`). Every write is captured there and verified; the user's current set is untouched. |
 | `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
 
 ---
@@ -1657,7 +1657,7 @@ Add a role to an access control: users with that role then pass it. To swap a ro
 | `role` | string | **Yes** | — | The role name. |
 | `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
 | `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
-| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `update_set` | string | **Yes** | — | sys_id of an In progress update set of that application (`create_update_set`). Every write is captured there and verified; the user's current set is untouched. |
 | `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
 
 ---
@@ -1677,7 +1677,7 @@ Remove a role from an access control. Removing the last role makes the platform 
 | `role` | string | **Yes** | — | The role name. |
 | `scope` | string | One of `scope`/`scope_id` | — | The ACL's application: scope name, or `"global"`. |
 | `scope_id` | string | One of `scope`/`scope_id` | — | The ACL's application by sys_scope sys_id. |
-| `update_set` | string | Store apps: **Yes** | — | sys_id of an In progress update set of that application. Every write is captured there and verified; the user's current set is untouched. |
+| `update_set` | string | **Yes** | — | sys_id of an In progress update set of that application (`create_update_set`). Every write is captured there and verified; the user's current set is untouched. |
 | `acknowledge_upgrade_skip` | boolean | No | — | Installed Store application only, after the user's review: upgrades then skip this ACL. Requires `update_set`. |
 
 ---

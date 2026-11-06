@@ -57,10 +57,9 @@ const targetParams = {
   update_set: z
     .string()
     .regex(/^[0-9a-f]{32}$/)
-    .optional()
     .describe(
-      "sys_id of an In progress update set of that application. Every write is captured there " +
-        "and verified; the user's own current update set is left as it is. Required for a Store application."
+      "sys_id of an In progress update set of that application (create one with create_update_set). Every write " +
+        "is captured there and verified; the user's own current update set is left as it is."
     ),
   acknowledge_upgrade_skip: z
     .boolean()
@@ -89,7 +88,11 @@ const fieldParams = {
   description: z.string().optional().describe("Description. The platform may write its own on first save."),
 };
 
-type TargetArgs = { scope?: string; scope_id?: string; update_set?: string; acknowledge_upgrade_skip?: boolean };
+type TargetArgs = { scope?: string; scope_id?: string; update_set: string; acknowledge_upgrade_skip?: boolean };
+
+/** Names core accepts: a role, operation, type or table. Stated here so the model sees them before a round trip. */
+const ROLE = /^[a-z][a-z0-9_.]{0,79}$/i;
+const IDENT = /^[a-z0-9_]{1,80}$/i;
 
 class ToolInputError extends Error {}
 
@@ -102,12 +105,9 @@ function scopeRef(scope: string | undefined, scopeId: string | undefined, requir
 }
 
 function target(args: TargetArgs): AclWriteTarget {
-  if (args.acknowledge_upgrade_skip && !args.update_set) {
-    throw new ToolInputError("acknowledge_upgrade_skip needs update_set: a Store customization must be captured in a named set.");
-  }
   return {
     scope: scopeRef(args.scope, args.scope_id, true)!,
-    ...(args.update_set ? { updateSet: args.update_set } : {}),
+    updateSet: args.update_set,
     ...(args.acknowledge_upgrade_skip ? { storeCustomization: { acknowledgeUpgradeSkip: true as const } } : {}),
   };
 }
@@ -149,8 +149,10 @@ function resultText(heading: string, result: AclWriteResult) {
       (w) => `- ${w.action} ${w.table} ${w.sysId} in update set ${clean(w.capture?.updateSetName)} (${w.capture?.updateSetSysId ?? "?"})`
     )
   );
-  // The whole result, for an agent that wants the before/after or the capture details.
-  lines.push("", "JSON:", JSON.stringify(result, null, 2));
+  // The whole result, for an agent that wants the before/after or the capture details. The form's
+  // messages come from the instance: redacted and stripped of markup, as on the error path.
+  const writes = result.writes.map((w) => ({ ...w, messages: w.messages.map(cleanMessage) }));
+  lines.push("", "JSON:", JSON.stringify({ ...result, writes }, null, 2));
   return text(lines);
 }
 
@@ -175,6 +177,8 @@ const REMEDIATION: Record<string, string> = {
     "Do not grant the role or switch credentials: report it to the user. get_role_elevation lists what is available.",
   api_unavailable: 'The instance does not offer the elevate API: check that glide.rest.apis.disabled does not list "UI Impersonate API".',
   not_applied: "The instance accepted the elevation but the session does not have the role. Compare by elevating in the UI.",
+  invalid_role: "Not a role name.",
+  request_failed: "The elevate API could not be reached or answered unexpectedly. Retry once; get_role_elevation reads the state.",
 };
 
 /** A failed ACL or elevation call, worded for the model: code, what happened, what to do. */
@@ -204,8 +208,10 @@ export function aclErrorText(action: string, error: unknown) {
     if (error.writeAttempted) lines.push("Read the ACL with get_acl before retrying.");
   } else if (error instanceof MetadataScopeError) {
     lines.push(`Error (${action}): ${error.code}${error.detail ? ` ${JSON.stringify(error.detail)}` : ""}`);
-    if (error.code === "store_scope") lines.push("An installed Store application: pass update_set and, only after the user's review, acknowledge_upgrade_skip.");
-    if (error.code === "update_set_required") lines.push("Pass update_set: an In progress update set of the ACL's application.");
+    if (error.code === "store_scope") lines.push("An installed Store application: pass acknowledge_upgrade_skip, and only after the user's review.");
+    else if (error.code === "invalid_input") lines.push("Check the input the detail names. update_set must be In progress and belong to the ACL's application.");
+    else if (error.code === "protected_record") lines.push("The platform protects this record from changes through its form.");
+    else if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
   } else {
     lines.push(`Error (${action}): ${cleanMessage(error instanceof Error ? error.message : String(error))}`);
   }
@@ -229,12 +235,12 @@ export function registerListAclsTool(server: McpServer): void {
         "Roles on one ACL are alternatives; snc_internal among them lets every internal user pass.",
       inputSchema: {
         instance: instanceParam,
-        table: z.string().optional().describe("ACLs of this table: the table, table.* and table.<field>."),
+        table: z.string().regex(IDENT).optional().describe("ACLs of this table: the table, table.* and table.<field>."),
         name: z.string().optional().describe("Exact ACL name, e.g. incident.short_description or a UI page name."),
         scope: z.string().optional().describe('Only this application\'s ACLs: a scope name, or "global".'),
         scope_id: z.string().regex(/^[0-9a-f]{32}$/).optional().describe("Only this application's ACLs, by sys_scope sys_id."),
-        operation: z.string().optional().describe("Operation name: read, write, create, delete, execute, ..."),
-        type: z.string().optional().describe("ACL type: record, ui_page, rest_endpoint, client_callable_script_include, ..."),
+        operation: z.string().regex(IDENT).optional().describe("Operation name: read, write, create, delete, execute, ..."),
+        type: z.string().regex(IDENT).optional().describe("ACL type: record, ui_page, rest_endpoint, client_callable_script_include, ..."),
         active: z.boolean().optional().describe("Only active (true) or inactive (false) ACLs."),
         elevate: z
           .boolean()
@@ -313,7 +319,9 @@ export function registerGetRoleElevationTool(server: McpServer): void {
       inputSchema: {
         instance: instanceParam,
         elevate: z
-          .array(z.string().regex(/^[a-z][a-z0-9_.]{0,79}$/i))
+          .array(z.string().regex(ROLE))
+          .min(1)
+          .max(5)
           .optional()
           .describe('Roles to elevate to and prove, e.g. ["security_admin"].'),
       },
@@ -357,12 +365,16 @@ export function registerCreateAclTool(server: McpServer): void {
       inputSchema: {
         instance: instanceParam,
         ...targetParams,
-        operation: z.string().describe("Operation name: read, write, create, delete, execute, ..."),
-        type: z.string().optional().describe("sys_security_type name. Default record."),
-        table: z.string().optional().describe("Record ACLs: the table."),
+        operation: z.string().regex(IDENT).describe("Operation name: read, write, create, delete, execute, ..."),
+        type: z.string().regex(IDENT).optional().describe("sys_security_type name. Default record."),
+        table: z.string().regex(IDENT).optional().describe("Record ACLs: the table."),
         field: z.string().optional().describe("Record ACLs: the field, or * for every field. Omit for the table itself."),
         name: z.string().optional().describe("Other types: the resource name (UI page, REST endpoint, script include, ...)."),
-        roles: z.array(z.string()).optional().describe("Role names. Any one of them passes the ACL."),
+        roles: z
+          .array(z.string().regex(ROLE))
+          .min(1)
+          .optional()
+          .describe("Role names; any one of them passes the ACL. Omit (not []) for an ACL decided by its condition or script alone."),
         active: z.boolean().optional().describe("Default true. false creates it inactive."),
         ...fieldParams,
       },
@@ -411,7 +423,7 @@ export function registerUpdateAclTool(server: McpServer): void {
         instance: instanceParam,
         sys_id: sysIdParam("The ACL's sys_id."),
         ...targetParams,
-        operation: z.string().optional().describe("Operation name."),
+        operation: z.string().regex(IDENT).optional().describe("Operation name."),
         active: z.boolean().optional().describe("Activate (true) or deactivate (false)."),
         ...fieldParams,
       },
@@ -485,7 +497,7 @@ export function registerAddAclRoleTool(server: McpServer): void {
       inputSchema: {
         instance: instanceParam,
         sys_id: sysIdParam("The ACL's sys_id."),
-        role: z.string().describe("The role name to add."),
+        role: z.string().regex(ROLE).describe("The role name to add."),
         ...targetParams,
       },
     },
@@ -517,7 +529,7 @@ export function registerRemoveAclRoleTool(server: McpServer): void {
       inputSchema: {
         instance: instanceParam,
         sys_id: sysIdParam("The ACL's sys_id."),
-        role: z.string().describe("The role name to remove."),
+        role: z.string().regex(ROLE).describe("The role name to remove."),
         ...targetParams,
       },
     },

@@ -87,6 +87,26 @@ describe("wrapping a real McpServer", () => {
         }
     }, 30_000);
 
+    it("allows elevating under a write deny, and refuses the ACL write", async () => {
+        // Elevation changes no instance data (a read); changing an ACL is a write.
+        installPolicy([denyLayer("test-deny", ["write"])]);
+        const ran: string[] = [];
+        const { client, server } = await createTestClientServer((s) => {
+            withGuardedTool("get_role_elevation", () => ran.push("get_role_elevation"))(s);
+            withGuardedTool("create_acl", () => ran.push("create_acl"))(s);
+        });
+
+        try {
+            expect((await client.callTool({ arguments: {}, name: "get_role_elevation" })).isError).toBeFalsy();
+            const refused = await client.callTool({ arguments: {}, name: "create_acl" });
+            expect(refused.isError).toBe(true);
+            expect(ran).toEqual(["get_role_elevation"]);
+        } finally {
+            await client.close();
+            await server.close();
+        }
+    }, 30_000);
+
     it("leaves annotations on the wire untouched by the guard", async () => {
         installPolicy([grantLayer("default", ["write", "execute"])]);
         const { client, server } = await createTestClientServer(

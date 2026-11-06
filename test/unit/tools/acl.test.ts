@@ -181,20 +181,43 @@ describe('writes', () => {
     expect(text).toContain(`- insert sys_security_acl ${ACL} in update set ACL work (${SET})`)
   })
 
-  it('needs the ACL\'s application, one way only', async () => {
-    let r = await call('create_acl', { operation: 'read', table: 't' })
-    expect(r.isError).toBe(true)
-    expect(r.text).toContain('Name the ACL\'s application')
-    r = await call('create_acl', { operation: 'read', table: 't', scope: 'x_app', scope_id: 'b'.repeat(32) })
-    expect(r.text).toContain('scope or scope_id, not both')
-    expect(manager.create).not.toHaveBeenCalled()
+  it('redacts the form\'s messages in the JSON it returns', async () => {
+    manager.create.mockResolvedValue({ ...writeResult, writes: [{ ...writeResult.writes[0], messages: ['saved <b>secret-abc</b>'] }] })
+    const { text } = await call('create_acl', { scope: 'x_app', update_set: SET, operation: 'read', table: 't' })
+    expect(text).toContain('"saved [omitted][redacted][omitted]"')
+    expect(text).not.toContain('secret-abc')
   })
 
-  it('passes a Store customization only with an update set', async () => {
-    let r = await call('update_acl', { sys_id: ACL, scope: 'sn_vendor', acknowledge_upgrade_skip: true, active: false })
-    expect(r.text).toContain('acknowledge_upgrade_skip needs update_set')
+  it('needs the ACL\'s application, one way only, and an update set', async () => {
+    let r = await call('create_acl', { operation: 'read', table: 't', update_set: SET })
+    expect(r.isError).toBe(true)
+    expect(r.text).toContain('Name the ACL\'s application')
+    r = await call('create_acl', { operation: 'read', table: 't', scope: 'x_app', scope_id: 'b'.repeat(32), update_set: SET })
+    expect(r.text).toContain('scope or scope_id, not both')
+    for (const [name, args] of [['create_acl', { operation: 'read', table: 't' }], ['update_acl', { sys_id: ACL, active: false }],
+      ['delete_acl', { sys_id: ACL, confirm: ACL }], ['add_acl_role', { sys_id: ACL, role: 'itil' }], ['remove_acl_role', { sys_id: ACL, role: 'itil' }]] as const) {
+      expect((await call(name, { ...args, scope: 'x_app' })).isError).toBe(true)
+    }
+    expect(manager.create).not.toHaveBeenCalled()
+    expect(manager.update).not.toHaveBeenCalled()
+    expect(manager.delete).not.toHaveBeenCalled()
+  })
+
+  it('refuses an empty role list and names that are not names, before calling core', async () => {
+    for (const args of [{ roles: [] }, { roles: ['itil,admin'] }, { table: 'incident^ORname=x' }, { operation: 'read;x' }]) {
+      const r = await call('create_acl', { scope: 'x_app', update_set: SET, operation: 'read', table: 't', ...args })
+      expect(r.isError).toBe(true)
+    }
+    expect((await call('add_acl_role', { sys_id: ACL, role: 'javascript:x', scope: 'x_app', update_set: SET })).isError).toBe(true)
+    expect((await call('get_role_elevation', { elevate: [] })).isError).toBe(true)
+    expect(manager.create).not.toHaveBeenCalled()
+    expect(manager.addRole).not.toHaveBeenCalled()
+    expect(mockStatus).not.toHaveBeenCalled()
+  })
+
+  it('passes a Store customization through with the update set', async () => {
     manager.update.mockResolvedValue({ ...writeResult, removedAutomaticRoles: [], warnings: [] })
-    r = await call('update_acl', { sys_id: ACL, scope: 'sn_vendor', update_set: SET, acknowledge_upgrade_skip: true, active: false })
+    const r = await call('update_acl', { sys_id: ACL, scope: 'sn_vendor', update_set: SET, acknowledge_upgrade_skip: true, active: false })
     expect(manager.update).toHaveBeenCalledWith(ACL, { scope: { scope: 'sn_vendor' }, updateSet: SET,
       storeCustomization: { acknowledgeUpgradeSkip: true }, active: false })
   })
@@ -227,10 +250,16 @@ describe('writes', () => {
     expect(r.text).toContain('write_not_applied: the write could not be verified (it was attempted)')
     expect(r.text).toContain('Instance said: outside field [omitted]x[omitted]')
     manager.update.mockRejectedValue(new MetadataScopeError('store_scope'))
-    r = await call('update_acl', { sys_id: ACL, scope: 'sn_vendor', condition: 'x' })
+    r = await call('update_acl', { sys_id: ACL, scope: 'sn_vendor', update_set: SET, condition: 'x' })
     expect(r.text).toContain('acknowledge_upgrade_skip')
+    manager.update.mockRejectedValue(new MetadataScopeError('invalid_input', { updateSetState: 'complete' }))
+    r = await call('update_acl', { sys_id: ACL, scope: 'x_app', update_set: SET, condition: 'x' })
+    expect(r.text).toContain('update_set must be In progress and belong to the ACL\'s application')
+    manager.update.mockRejectedValue(new MetadataScopeError('scope_mismatch'))
+    r = await call('update_acl', { sys_id: ACL, scope: 'x_app', update_set: SET, condition: 'x' })
+    expect(r.text).toContain('Pass the ACL\'s own application')
     manager.update.mockRejectedValue(new PolicyRefusal('Refused: changing instance data'))
-    r = await call('update_acl', { sys_id: ACL, scope: 'x_app', condition: 'x' })
+    r = await call('update_acl', { sys_id: ACL, scope: 'x_app', update_set: SET, condition: 'x' })
     expect(r.text).toContain('refused by policy: Refused: changing instance data')
   })
 })

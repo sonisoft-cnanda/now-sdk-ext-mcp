@@ -125,6 +125,15 @@ describe('getServiceNowInstance', () => {
     expect(await getServiceNowInstance('elevated-test', { elevatedRoles: [] })).toBe(plain)
   })
 
+  it('reuses one elevated instance whatever the order of its roles', async () => {
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'admin', password: 'secret', instanceUrl: 'https://order.service-now.com',
+    })
+    const ab = await getServiceNowInstance('order-test', { elevatedRoles: ['b_role', 'a_role'] })
+    expect(await getServiceNowInstance('order-test', { elevatedRoles: ['a_role', 'b_role'] })).toBe(ab)
+    expect(await getServiceNowInstance('order-test', { elevatedRoles: ['a_role'] })).not.toBe(ab)
+  })
+
   it('should maintain separate cache entries for different aliases', async () => {
     mockGetCredentials.mockImplementation(async (alias: string) => ({
       type: 'basic',

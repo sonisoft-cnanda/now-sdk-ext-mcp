@@ -944,9 +944,9 @@ query_update_records(table: "incident", query: "active=true^priority=5", data: {
 | `delete_acl` | `sys_id`, `confirm` (= `sys_id`), target | Delete with its role rows |
 | `add_acl_role` / `remove_acl_role` | `sys_id`, `role`, target | One role |
 
-Target on every write: `scope` (scope name or `"global"`) or `scope_id`, `update_set` (an In progress
-set of that application), and for an installed Store application `acknowledge_upgrade_skip`, only after
-the user's review.
+Target on every write: `scope` (scope name or `"global"`) or `scope_id`, and `update_set` (required: an
+In progress set of that application, e.g. from `create_update_set`). For an installed Store application,
+also `acknowledge_upgrade_skip`, only after the user's review.
 
 ---
 
