@@ -241,8 +241,11 @@ describe('getServiceNowInstance', () => {
     })
     const error = Object.assign(new Error('ECONNRESET'), { code: 'ECONNRESET' })
     const operation = jest.fn<(instance: InstanceType<typeof ServiceNowInstance>) => Promise<string>>().mockRejectedValue(error)
+    const first = await getServiceNowInstance('no-retry', { elevatedRoles: ['security_admin'] })
     await expect(withConnectionRetry('no-retry', operation, { elevatedRoles: ['security_admin'], retry: false })).rejects.toBe(error)
     expect(operation).toHaveBeenCalledTimes(1)
+    // The failed connection is dropped: the next call builds a fresh one.
+    expect(await getServiceNowInstance('no-retry', { elevatedRoles: ['security_admin'] })).not.toBe(first)
   })
 
   it('retries an elevated operation on a fresh elevated instance, leaving the plain one cached', async () => {

@@ -236,6 +236,15 @@ describe('writes', () => {
     expect(options()).toEqual({ elevatedRoles: ['security_admin'], retry: false })
   })
 
+  it('tells the model a failed write may have landed, and a failed read nothing of the kind', async () => {
+    manager.addRole.mockRejectedValue(new Error('socket hang up'))
+    let r = await call('add_acl_role', { sys_id: ACL, role: 'x_app.lead', scope: 'x_app', update_set: SET })
+    expect(r.text).toContain('The change may have been applied before this failed: read the ACL with get_acl')
+    manager.get.mockRejectedValue(new Error('socket hang up'))
+    r = await call('get_acl', { sys_id: ACL })
+    expect(r.text).not.toContain('may have been applied')
+  })
+
   it('reports a partial change with the ACL\'s state and the step that failed', async () => {
     manager.create.mockRejectedValue(new AclPartialError(ACL, 'create', 'inactive', new Error('form said secret-xyz')))
     const { text, isError } = await call('create_acl', { scope: 'x_app', update_set: SET, operation: 'read', table: 't', roles: ['r'] })

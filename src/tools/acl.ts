@@ -46,11 +46,15 @@ const instanceParam = z
 
 const sysIdParam = (what: string) => z.string().regex(/^[0-9a-f]{32}$/, "a 32-character sys_id").describe(what);
 
+/** Names core accepts: a role, operation, type or table. Stated here so the model sees them before a round trip. */
+const ROLE = /^[a-z][a-z0-9_.]{0,79}$/i;
+const IDENT = /^[a-z0-9_]{1,80}$/i;
+
 /** Where a write goes: the ACL's application and an In progress update set of it. */
 const targetParams = {
   scope: z
     .string()
-    .regex(/^[a-z0-9_]{1,80}$/i)
+    .regex(IDENT)
     .optional()
     .describe('The ACL\'s application: its scope name (e.g. "x_acme_app"), or "global". Give this or scope_id.'),
   scope_id: z
@@ -100,9 +104,6 @@ const fieldParams = {
 
 type TargetArgs = { scope?: string; scope_id?: string; update_set: string; acknowledge_upgrade_skip?: boolean };
 
-/** Names core accepts: a role, operation, type or table. Stated here so the model sees them before a round trip. */
-const ROLE = /^[a-z][a-z0-9_.]{0,79}$/i;
-const IDENT = /^[a-z0-9_]{1,80}$/i;
 
 class ToolInputError extends Error {}
 
@@ -225,9 +226,15 @@ export function aclErrorText(action: string, error: unknown) {
     else if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
   } else {
     lines.push(`Error (${action}): ${cleanMessage(error instanceof Error ? error.message : String(error))}`);
+    if (WRITE_ACTIONS.has(action)) {
+      lines.push("The change may have been applied before this failed: read the ACL with get_acl (or list_acls) before retrying.");
+    }
   }
   return { ...text(lines), isError: true };
 }
+
+/** A write the model must not replay blind: it may have landed before the failure. */
+const WRITE_ACTIONS = new Set(["create_acl", "update_acl", "delete_acl", "add_acl_role", "remove_acl_role"]);
 
 const SECURITY_CHANGE =
   "This is a security change: before calling it, tell the user who gains or loses access and get their go-ahead. " +
@@ -350,7 +357,7 @@ export function registerGetRoleElevationTool(server: McpServer): void {
               ),
             ]
           : ["This user may not elevate to any role."];
-        lines.push(`Elevated in this session: ${status.elevated.length ? status.elevated.join(", ") : "(none)"}`);
+        lines.push(`Elevated in this session: ${status.elevated.length ? status.elevated.map(clean).join(", ") : "(none)"}`);
         return text(lines);
       } catch (error) {
         return aclErrorText("get_role_elevation", error);

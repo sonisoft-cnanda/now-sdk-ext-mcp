@@ -125,7 +125,7 @@ export async function getServiceNowInstance(
   const instance = new ServiceNowInstance(snSettings);
   if (options?.elevatedRoles?.length) {
     // An audit trail of elevated connections: the session stays elevated on the instance until its idle timeout.
-    log.info("Opened an elevated connection", { alias: resolvedAlias, roles: [...options.elevatedRoles] });
+    log.info("Created an elevated connection; it elevates at each login", { alias: resolvedAlias, roles: [...options.elevatedRoles] });
   }
   instanceCache.set(key, {
     instance,
@@ -208,7 +208,13 @@ export async function withConnectionRetry<T>(
   try {
     return await operation(snInstance);
   } catch (error) {
-    if (options?.retry !== false && isRetryableError(error)) {
+    if (isRetryableError(error) && options?.retry === false) {
+      // Not replayed (the operation may have landed), but the failed connection is not reused either.
+      log.warn("Connection error on an operation that is not retried; dropping the connection", { error });
+      clearInstance(authAlias, options);
+      throw error;
+    }
+    if (isRetryableError(error)) {
       // The error went into the message before, unredacted — an auth or HTTP failure
       // here carries a live session. As metadata it goes through redaction.
       log.warn("Retryable error, refreshing session and retrying", { error });

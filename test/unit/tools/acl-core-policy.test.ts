@@ -24,8 +24,10 @@ describe('core refuses code on an ACL under an execute deny', () => {
 
   it('lets a role-only create past the gate under the same deny', async () => {
     installPolicy([denyLayer('test-deny', ['execute']), grantLayer('default', ['write', 'execute'])])
-    // It then fails reaching the fake instance, which is fine: what matters is that it was not refused by policy.
+    // Past the gate it goes on to its first read, which fails for want of a credential (no network): what matters is
+    // that it got that far rather than being refused by policy.
     const error = await new AclManager(instance()).create({ ...target, operation: 'read', table: 't', roles: ['itil'] }).catch(e => e)
     expect(isPolicyRefusal(error)).toBe(false)
-  }, 60_000)
+    expect(String(error?.message ?? error)).toMatch(/credential|auth|alias|login|session/i)
+  })
 })
