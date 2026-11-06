@@ -5,6 +5,8 @@
 import { describe, expect, it } from '@jest/globals'
 import * as core from '@sonisoft/now-sdk-ext-core'
 
+const { stripMarkup } = await import('../../../src/tools/metadata.js')
+
 const methods: Record<string, string[]> = {
   MetadataFormWriter: ['insert', 'update', 'delete'],
   ColumnWriter: ['addColumn', 'removeColumn'],
@@ -30,7 +32,7 @@ describe('core exports used by the metadata tools', () => {
 
 describe('the real redactor after markup is stripped', () => {
   it('redacts a secret that markup had split', () => {
-    const stripped = 'password<b>: </b>hunter2'.replace(/<[^>]*>/g, '').replace(/[<>]/g, '')
+    const stripped = stripMarkup('password<b>: </b>hunter2')
     expect((core as any).redactMessage(stripped)).not.toContain('hunter2')
   })
 })

@@ -35,9 +35,18 @@ const NO_CONTROL = /^[^\p{Cc}]*$/u;
 
 // Values come from the instance: one line each, no control characters (markup stripped from free text).
 const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
+/** Tags removed until none is left (nested markup cannot reassemble one), then any stray angle bracket. */
+export function stripMarkup(text: string): string {
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^<>]*>/g, "");
+  } while (text !== previous);
+  return text.replace(/[<>]/g, "");
+}
+
 // Markup is stripped before redaction, so a secret split by a tag (sec<b>ret</b>) is redacted whole.
-const cleanMessage = (text: string): string =>
-  redactMessage(text.replace(/<[^>]*>/g, "").replace(/[<>]/g, "")).replace(/\p{Cc}/gu, " ").slice(0, 500);
+const cleanMessage = (text: string): string => redactMessage(stripMarkup(text)).replace(/\p{Cc}/gu, " ").slice(0, 500);
 
 function text(lines: string[]) {
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
