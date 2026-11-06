@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { constants } from "node:fs";
-import { access, lstat, mkdir, open, readFile, realpath, stat, unlink } from "node:fs/promises";
+import { access, lstat, mkdir, open, realpath, stat, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import { SessionAuthError, createBrowserSession } from "@sonisoft/now-sdk-ext-core";
@@ -141,6 +141,8 @@ export function registerCreateBrowserSessionTool(server: McpServer): void {
         const fromAlias = `${alias.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 30)}-${stamp}`;
         // A default name must also be deletable: one that would not pass NAME (an alias starting with _, say) is not used.
         const fileName = name ?? (NAME.test(fromAlias) ? fromAlias : `session-${stamp}`);
+        // A taken name is refused before logging in, so no UI session is opened for nothing. O_EXCL stays the real guard.
+        if (await lstat(join(directory, `${fileName}.json`)).then(() => true, () => false)) throw new SessionFileError("session_exists");
         const session = await createBrowserSession({ alias });
         const path = await writeSessionFile(directory, fileName, JSON.stringify(session.storageState));
         const cookies = session.storageState.cookies.length;
@@ -194,14 +196,26 @@ export function registerDeleteBrowserSessionTool(server: McpServer): void {
         const parent = await realpath(dirname(path)).catch(() => undefined);
         if (parent !== directory) throw new SessionFileError("not_a_session_file");
         const target = join(directory, basename(path));
-        const info = await lstat(target).catch(() => undefined);
-        if (!info) return { ...text([`Error (delete_browser_session): no session file at ${clean(target)}; nothing was deleted.`]), isError: true };
-        // Only what create_browser_session writes: a regular file of ours, 0600, holding a storage state.
-        const uid = process.getuid?.();
-        if (!info.isFile() || info.size > MAX_STATE_BYTES || (uid !== undefined && (info.uid !== uid || (info.mode & 0o777) !== 0o600))) {
+        // Only what create_browser_session writes: a regular file of ours, 0600, holding a storage state. Checked through
+        // one handle opened without following a link, so the file read is the file checked.
+        let handle;
+        try {
+          handle = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException)?.code;
+          if (code === "ENOENT") return { ...text([`Error (delete_browser_session): no session file at ${clean(target)}; nothing was deleted.`]), isError: true };
           throw new SessionFileError("not_a_session_file");
         }
-        if (!isStorageState(await readFile(target, "utf8"))) throw new SessionFileError("not_a_session_file");
+        try {
+          const info = await handle.stat();
+          const uid = process.getuid?.();
+          if (!info.isFile() || info.size > MAX_STATE_BYTES || (uid !== undefined && (info.uid !== uid || (info.mode & 0o777) !== 0o600))) {
+            throw new SessionFileError("not_a_session_file");
+          }
+          if (!isStorageState(await handle.readFile("utf8"))) throw new SessionFileError("not_a_session_file");
+        } finally {
+          await handle.close();
+        }
         await unlink(target);
         return text([`Deleted the browser session file ${target}.`]);
       } catch (error) {

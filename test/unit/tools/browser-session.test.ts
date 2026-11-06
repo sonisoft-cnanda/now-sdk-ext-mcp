@@ -81,9 +81,12 @@ describe('create_browser_session', () => {
     await call('create_browser_session', {})
     expect(readdirSync(root)[0]).toMatch(/^my_alias-\d{4}-\d\d-\d\dT[\d-]+Z\.json$/)
     writeFileSync(join(root, 'taken.json'), 'keep')
+    const logins = createBrowserSession.mock.calls.length
     const again = await call('create_browser_session', { instance: 'dev', name: 'taken' })
     expect(again.isError).toBe(true)
     expect(again.text).toContain('session_exists')
+    // Refused before logging in: no UI session opened for nothing.
+    expect(createBrowserSession.mock.calls.length).toBe(logins)
     expect(readFileSync(join(root, 'taken.json'), 'utf8')).toBe('keep')
     expect(readdirSync(root).filter((f) => f.endsWith('.tmp'))).toEqual([])
   })
