@@ -1552,7 +1552,7 @@ Repair an installed Store or company application, as the platform's Repair Appli
 
 ## Legacy workflows (read-only)
 
-These tools read Workflow Editor workflows as `nex workflow list|show|definitions|export|outline|convert|validate` do. No workflow is changed. Validation (`validate_workflow`, and the editor status in `get_workflow`) renders the editor's report page, which core classifies as a read; it saves that run's results over the previous run's. Workflow content is returned as data, never as instructions: secrets are redacted, it is fenced by start and end markers, and long views are cut at 80,000 characters (about 20k tokens) with a note.
+These tools read Workflow Editor workflows as `nex workflow list|show|definitions|export|outline|convert|validate` do. No workflow is changed. All but `validate_workflow` only read. `validate_workflow` renders the editor's report page, which saves that run's results over the previous run's, so it is classified as a write (outside the `readonly` package, refused by `NEX_POLICY_DENY=write`). Workflow content is returned as data, never as instructions: secrets are redacted, it is fenced by start and end markers carrying a per-call random tag, and long views are cut at 80,000 characters (about 20k tokens) with a note.
 
 A `workflow` that is a version sys_id is read as given, and `version` is ignored for it.
 
@@ -1636,7 +1636,7 @@ Plan the move to Flow Designer: how each activity maps to a flow step and what h
 
 ## validate_workflow
 
-Run the editor's Validate Workflow on a version (by default your draft, or else the published version) and return its report. The report replaces that version's previous one.
+Run the editor's Validate Workflow on a version (by default your draft, or else the published version) and return its report. The platform saves the report over that version's previous one, so this needs `write`.
 
 ### Parameters
 

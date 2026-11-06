@@ -18,6 +18,7 @@ import {
 import { withConnectionRetry } from "../common/connection.js";
 import { annotationsFor } from "../common/annotations.js";
 import { instanceParam } from "./working-set.js";
+import { stripMarkup } from "../common/tool-text.js";
 
 /**
  * Application metadata written through the platform's forms, as `nex metadata` does: core's writers check the
@@ -35,15 +36,7 @@ const NO_CONTROL = /^[^\p{Cc}]*$/u;
 
 // Values come from the instance: one line each, no control characters (markup stripped from free text).
 const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
-/** Tags removed until none is left (nested markup cannot reassemble one), then any stray angle bracket. */
-export function stripMarkup(text: string): string {
-  let previous: string;
-  do {
-    previous = text;
-    text = text.replace(/<[^<>]*>/g, "");
-  } while (text !== previous);
-  return text.replace(/[<>]/g, "");
-}
+export { stripMarkup };
 
 // Markup is stripped before redaction, so a secret split by a tag (sec<b>ret</b>) is redacted whole.
 const cleanMessage = (text: string): string => redactMessage(stripMarkup(text)).replace(/\p{Cc}/gu, " ").slice(0, 500);

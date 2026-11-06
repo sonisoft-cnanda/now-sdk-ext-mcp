@@ -4,7 +4,6 @@ import {
   ApplicationManager,
   StoreAppRepairError,
   isPolicyRefusal,
-  redactMessage,
   type StoreAppRepairResult,
   type StoreAppRepairStart,
 } from "@sonisoft/now-sdk-ext-core";
@@ -12,7 +11,7 @@ import { withConnectionRetry } from "../common/connection.js";
 import { annotationsFor } from "../common/annotations.js";
 import { progressReporter } from "../common/progress.js";
 import { instanceParam } from "./working-set.js";
-import { stripMarkup } from "./metadata.js";
+import { clean, cleanMessage, text } from "../common/tool-text.js";
 
 /**
  * Repair an installed Store or company application, as `nex store repair` does: the platform's Repair Application
@@ -20,13 +19,6 @@ import { stripMarkup } from "./metadata.js";
  * application, refuses what the platform would not repair, waits for the tracker, and reads back the upgrade history
  * the repair wrote. The start is never replayed after a transport error: a repair that started would run twice.
  */
-
-const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
-const cleanMessage = (text: string): string => redactMessage(stripMarkup(text)).replace(/\p{Cc}/gu, " ").slice(0, 500);
-
-function text(lines: string[]) {
-  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-}
 
 const appLine = (app: StoreAppRepairStart["app"]) =>
   `${clean(app.name)} (${clean(app.scope)}) ${clean(app.version)}${app.customizationVersion ? `, customization ${clean(app.customizationVersion)}` : ""}`;
@@ -38,7 +30,8 @@ function resultLines(result: StoreAppRepairResult): string[] {
   else if (result.success) {
     lines.push(`Not confirmed as repaired (the tracker succeeded but no finished upgrade history was found): ${appLine(result.app)}`);
   }
-  // As nex decides it: not finished (under 100%, not a final state 3/4) when the wait ended.
+  // Mirrors nex's repairOutcome (now-sdk-ext-cli src/services/store-app-repair-display.service.ts): still running
+  // means under 100% and not a final sys_execution_tracker state, 3 (failed) or 4 (cancelled).
   else if (result.percent_complete < 100 && result.status !== "3" && result.status !== "4") {
     lines.push(`Still running when the wait ended: ${appLine(result.app)}. Do not start another repair; check sys_execution_tracker ${clean(result.trackerId)}.`);
   }
