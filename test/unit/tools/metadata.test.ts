@@ -132,6 +132,10 @@ describe('records', () => {
     form.update.mockRejectedValue(new MetadataVerificationError('not_captured', 'sys_script_include', REC, undefined, ['saw secret-<b>abc</b> here'], true))
     r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })
     expect(r.text).toContain('Instance said: saw [redacted] here')
+    // Nested markup leaves no tag behind.
+    form.update.mockRejectedValue(new MetadataVerificationError('not_captured', 'sys_script_include', REC, undefined, ['a<<b>script>alert(1)</script>'], true))
+    r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })
+    expect(r.text).not.toMatch(/<|>/)
     expect(r.text).toContain('read the record and its capture before retrying')
     form.update.mockRejectedValue(new MetadataScopeError('invalid_input', { updateSetState: 'complete', updateSetApplication: SCOPE_ID }))
     r = await call('update_metadata_record', { table: 'sys_script_include', sys_id: REC, ...T, fields: { name: 'x' } })

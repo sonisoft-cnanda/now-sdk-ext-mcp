@@ -37,7 +37,7 @@ const NO_CONTROL = /^[^\p{Cc}]*$/u;
 const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
 // Markup is stripped before redaction, so a secret split by a tag (sec<b>ret</b>) is redacted whole.
 const cleanMessage = (text: string): string =>
-  redactMessage(text.replace(/<[^>]*>/g, "").replace(/<[^>]*$/, "")).replace(/\p{Cc}/gu, " ").slice(0, 500);
+  redactMessage(text.replace(/<[^>]*>/g, "").replace(/[<>]/g, "")).replace(/\p{Cc}/gu, " ").slice(0, 500);
 
 function text(lines: string[]) {
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
