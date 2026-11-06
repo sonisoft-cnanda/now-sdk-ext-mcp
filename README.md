@@ -368,6 +368,31 @@ control.
 > This is a guardrail, not a security boundary. Anything holding the credential can
 > reach the instance directly.
 
+### Role elevation (ACLs)
+
+Changing an access control needs the elevated `security_admin` role, the one the **Elevate Role**
+menu item turns on. Elevation belongs to one server session, so a tool that elevates uses a
+connection that elevates every session as it logs in. The ACL write tools (`create_acl`,
+`update_acl`, `delete_acl`, `add_acl_role`, `remove_acl_role`) always elevate; `get_role_elevation`
+and the ACL reads (`list_acls`, `get_acl`) elevate only when called with `elevate`. Elevated
+connections are cached apart from the plain one, and no other tool runs elevated.
+
+Elevating changes no instance data, so `NEX_POLICY_DENY` and the `readonly` package allow it, while
+the ACL writes are refused like any other write. A read-only session can therefore still elevate:
+`get_role_elevation` with `elevate`, or `elevate` on `list_acls` / `get_acl`, opens a
+`security_admin` session. The server stops reusing it 10 minutes after opening it, but on the
+instance the session stays elevated until its idle timeout.
+
+Code on an ACL (a script, or a `javascript:` condition) runs on the instance at every check, so
+writing it also needs `execute`. `NEX_POLICY_DENY=execute` allows role-only ACL changes and refuses
+ones that carry code, or that make existing code run where it did not (switching on, changing the
+operation, turning admin overrides off). Role changes stay plain writes, although adding a role, or
+removing the last one (which brings `snc_internal` back), changes who reaches the ACL's existing code.
+
+A user may elevate to `security_admin` only when it is assigned to them; in the base system only
+the `admin` user has it. The ACL write tools need an `update_set`, so a security change is never
+captured in whatever set the user has open. Elevation was verified with basic-auth aliases.
+
 ## Contributing
 
 ### Testing

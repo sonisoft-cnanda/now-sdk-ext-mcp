@@ -19,6 +19,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import {
+  registerAddAclRoleTool,
+  registerCreateAclTool,
+  registerDeleteAclTool,
+  registerGetAclTool,
+  registerGetRoleElevationTool,
+  registerListAclsTool,
+  registerRemoveAclRoleTool,
+  registerUpdateAclTool,
+} from "../tools/acl.js";
+import {
   registerAggregateGroupedTool,
   registerAggregateQueryTool,
   registerCountRecordsTool,
@@ -164,6 +174,15 @@ import {
 export type ToolRegistrar = (server: McpServer) => void;
 
 export const TOOL_REGISTRY: Record<string, ToolRegistrar> = {
+  // ---- access controls and role elevation
+  add_acl_role: registerAddAclRoleTool,
+  create_acl: registerCreateAclTool,
+  delete_acl: registerDeleteAclTool,
+  get_acl: registerGetAclTool,
+  get_role_elevation: registerGetRoleElevationTool,
+  list_acls: registerListAclsTool,
+  remove_acl_role: registerRemoveAclRoleTool,
+  update_acl: registerUpdateAclTool,
   // ---- aggregate
   aggregate_grouped: registerAggregateGroupedTool,
   aggregate_query: registerAggregateQueryTool,

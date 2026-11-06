@@ -87,6 +87,52 @@ describe("wrapping a real McpServer", () => {
         }
     }, 30_000);
 
+    it("allows elevating under a write deny, and refuses the ACL write", async () => {
+        // Elevation changes no instance data (a read); changing an ACL is a write.
+        installPolicy([denyLayer("test-deny", ["write"])]);
+        const ran: string[] = [];
+        const { client, server } = await createTestClientServer((s) => {
+            withGuardedTool("get_role_elevation", () => ran.push("get_role_elevation"))(s);
+            withGuardedTool("list_acls", () => ran.push("list_acls"))(s);
+            withGuardedTool("create_acl", () => ran.push("create_acl"))(s);
+        });
+
+        try {
+            // The guard decides per tool, not per argument, so elevate cannot turn these reads into writes: elevating
+            // and elevated reads are reads by decision.
+            expect((await client.callTool({ arguments: {}, name: "get_role_elevation" })).isError).toBeFalsy();
+            expect((await client.callTool({ arguments: {}, name: "list_acls" })).isError).toBeFalsy();
+            const refused = await client.callTool({ arguments: {}, name: "create_acl" });
+            expect(refused.isError).toBe(true);
+            expect(ran).toEqual(["get_role_elevation", "list_acls"]);
+        } finally {
+            await client.close();
+            await server.close();
+        }
+    }, 30_000);
+
+    it("leaves role-only ACL writes to core under an execute deny: they are not execute tools", async () => {
+        // Code on an ACL needs execute, but only when a call carries code, which core's AclManager checks. A static
+        // execute verb here would refuse every role-only ACL change under NEX_POLICY_DENY=execute.
+        installPolicy([denyLayer("test-deny", ["execute"]), grantLayer("default", ["write", "execute"])]);
+        const ran: string[] = [];
+        const { client, server } = await createTestClientServer((s) => {
+            for (const name of ["create_acl", "update_acl", "delete_acl", "add_acl_role", "remove_acl_role"]) {
+                withGuardedTool(name, () => ran.push(name))(s);
+            }
+        });
+
+        try {
+            for (const name of ["create_acl", "update_acl", "delete_acl", "add_acl_role", "remove_acl_role"]) {
+                expect((await client.callTool({ arguments: {}, name })).isError).toBeFalsy();
+            }
+            expect(ran).toEqual(["create_acl", "update_acl", "delete_acl", "add_acl_role", "remove_acl_role"]);
+        } finally {
+            await client.close();
+            await server.close();
+        }
+    }, 30_000);
+
     it("leaves annotations on the wire untouched by the guard", async () => {
         installPolicy([grantLayer("default", ["write", "execute"])]);
         const { client, server } = await createTestClientServer(

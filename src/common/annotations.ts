@@ -227,6 +227,27 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     close_incident: SET,
     approve_change: SET,
 
+    // ---- access controls. Reads change nothing. Elevating a session (get_role_elevation, or
+    // elevate on a read) changes no instance data, so it is a read: a deliberate decision, so a
+    // read-only session can still read what only security_admin may see (README: Role elevation).
+    list_acls: READ,
+    get_acl: READ,
+    get_role_elevation: READ,
+    // The writes change who may do what. Creating an ACL or adding a role only adds a way in
+    // (not destructive); updating, deleting or removing a role can open access as well as
+    // close it (destructive). Code on an ACL (a script or javascript: condition) needs execute
+    // too, but only when a call carries it, so it is not a static verb here (that would refuse
+    // role-only ACLs under deny-execute): core's AclManager checks write+execute against the
+    // same installed policy before writing code (core 6.18.5).
+    create_acl: CREATE,
+    // Repeating with the same values leaves the same ACL.
+    update_acl: OVERWRITE,
+    // A repeat call is refused (acl_not_found, role_already_present, role_not_present): not
+    // idempotent, so a client must not retry them on its own.
+    delete_acl: OVERWRITE_ONCE,
+    add_acl_role: CREATE,
+    remove_acl_role: OVERWRITE_ONCE,
+
     // ---- update sets
     get_current_update_set: READ,
     list_update_sets: READ,

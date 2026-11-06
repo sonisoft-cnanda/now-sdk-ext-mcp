@@ -9,7 +9,7 @@ This is a TypeScript MCP server built on `@modelcontextprotocol/sdk` (v1.x). It 
 ## Architecture
 
 - **Framework**: `@modelcontextprotocol/sdk` v1.x (official MCP TypeScript SDK)
-- **Core Library**: `@sonisoft/now-sdk-ext-core` v5.0.1 — provides all ServiceNow communication (auth, HTTP, WebSocket, script execution, ATF, syslog, etc.)
+- **Core Library**: `@sonisoft/now-sdk-ext-core` (see package.json for the range) — provides all ServiceNow communication (auth, HTTP, WebSocket, script execution, ATF, syslog, etc.)
 - **Transport**: stdio (standard for local MCP servers used by Claude Desktop, VS Code, Cursor, etc.)
 - **Auth**: Instance resolution follows a fallback chain: tool `instance` parameter → `SN_AUTH_ALIAS` env var. If the user says "on my myinstance instance", the AI passes `instance: "myinstance"`. If no instance is mentioned, the env var is used. The connection manager in `src/common/connection.ts` resolves the alias to credentials via `@servicenow/sdk-cli`'s credential store and caches instances per alias.
 
@@ -41,7 +41,7 @@ The CLI is the reference implementation for how to use the core library. When ad
 - `initLogging()` runs at the very top of `src/index.ts`, before anything constructs a core manager. Core's loggers are field initializers, and until NEX-3 merely constructing one created `./logs/` in whatever directory the client launched this server from. File logging is now off unless `NEX_LOG_FILE` or `NEX_LOG_DIR` is set.
 
 - **Every tool is permission-checked** by a Proxy over `registerTool` installed in
-  `src/index.ts`. Do not change `ToolRegistrar` to pass config — 87 registrations and
+  `src/index.ts`. Do not change `ToolRegistrar` to pass config — every registration and
   `registry.test.ts` depend on its current shape. A tool with no entry in
   `TOOL_ANNOTATIONS` throws at REGISTRATION, so the server will not start.
 - `verbs` and `target` live on `TOOL_ANNOTATIONS` and are stripped by `annotationsFor`

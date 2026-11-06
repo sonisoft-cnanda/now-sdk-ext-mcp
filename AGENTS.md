@@ -9,7 +9,7 @@ This file is only about the things that will bite you *here* and not elsewhere.
 
 ## What this repository is
 
-An MCP server exposing ~86 ServiceNow tools to AI agents. It is launched as a
+An MCP server exposing ServiceNow tools to AI agents. It is launched as a
 non-interactive child process, speaks JSON-RPC over stdio, and acts against real
 instances with the launching user's credentials.
 

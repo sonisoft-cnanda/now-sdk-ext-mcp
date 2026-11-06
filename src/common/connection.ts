@@ -16,7 +16,36 @@ interface CacheEntry {
 /** Cache TTL — 30 minutes. ServiceNow sessions typically expire after idle time. */
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
+/**
+ * An elevated instance is rebuilt sooner: a shorter window in which this process holds an elevated connection.
+ * The evicted server session is not logged out; it stays elevated until the instance's idle timeout, but nothing
+ * here can reach it once its cookie is dropped.
+ */
+const ELEVATED_CACHE_TTL_MS = 10 * 60 * 1000;
+
 const instanceCache = new Map<string, CacheEntry>();
+
+/** How a tool wants its connection: plain, or elevated to roles (e.g. security_admin) at every login. */
+export interface ConnectionOptions {
+  /**
+   * Elevated privilege roles every session of the instance elevates to as it logs in, as the
+   * Elevate Role dialog does. An elevated instance is cached apart from the plain one, so tools
+   * that do not ask for elevation never run on an elevated session.
+   */
+  elevatedRoles?: readonly string[];
+  /**
+   * false: do not re-run the operation on a fresh connection after a transport error. For a write
+   * that may have landed before its response was lost: a replay would report a change that applied
+   * as a failure (role_already_present, acl_not_found) or apply it twice.
+   */
+  retry?: boolean;
+}
+
+/** The cache key: the alias, plus the elevated roles when there are any (core keys its sessions the same way). */
+function cacheKey(alias: string, options?: ConnectionOptions): string {
+  const roles = [...new Set(options?.elevatedRoles ?? [])].sort();
+  return roles.length ? `${alias}#elevated:${roles.join(",")}` : alias;
+}
 
 /**
  * Resolves the auth alias from the explicit parameter or the SN_AUTH_ALIAS env var.
@@ -46,19 +75,21 @@ function resolveAlias(authAlias?: string): string {
  * single conversation (e.g., myinstance and prod).
  */
 export async function getServiceNowInstance(
-  authAlias?: string
+  authAlias?: string,
+  options?: ConnectionOptions
 ): Promise<ServiceNowInstance> {
   const resolvedAlias = resolveAlias(authAlias);
+  const key = cacheKey(resolvedAlias, options);
 
-  const cached = instanceCache.get(resolvedAlias);
+  const cached = instanceCache.get(key);
   if (cached) {
     const age = Date.now() - cached.createdAt;
-    if (age < CACHE_TTL_MS) {
+    if (age < (key === resolvedAlias ? CACHE_TTL_MS : ELEVATED_CACHE_TTL_MS)) {
       return cached.instance;
     }
     // TTL expired — evict and create fresh
     log.debug("Cache TTL expired, refreshing session", { alias: resolvedAlias });
-    instanceCache.delete(resolvedAlias);
+    instanceCache.delete(key);
   }
 
   const credential = await resolveSessionCredentials(resolvedAlias);
@@ -88,10 +119,15 @@ export async function getServiceNowInstance(
     alias: resolvedAlias,
     credential,
     credentialProvider: () => resolveSessionCredentials(resolvedAlias),
+    ...(options?.elevatedRoles?.length ? { elevatedRoles: [...options.elevatedRoles] } : {}),
   };
 
   const instance = new ServiceNowInstance(snSettings);
-  instanceCache.set(resolvedAlias, {
+  if (options?.elevatedRoles?.length) {
+    // An audit trail of elevated connections: the session stays elevated on the instance until its idle timeout.
+    log.info("Created an elevated connection; it elevates at each login", { alias: resolvedAlias, roles: [...options.elevatedRoles] });
+  }
+  instanceCache.set(key, {
     instance,
     createdAt: Date.now(),
   });
@@ -100,12 +136,12 @@ export async function getServiceNowInstance(
 
 /**
  * Evicts a cached instance so the next call to getServiceNowInstance()
- * creates a fresh connection.
+ * creates a fresh connection. With options, only that (plain or elevated) instance.
  */
-export function clearInstance(authAlias?: string): void {
+export function clearInstance(authAlias?: string, options?: ConnectionOptions): void {
   const resolved = authAlias || process.env.SN_AUTH_ALIAS;
   if (resolved) {
-    instanceCache.delete(resolved);
+    instanceCache.delete(cacheKey(resolved, options));
   }
 }
 
@@ -165,18 +201,27 @@ export function isRetryableResponse(
  */
 export async function withConnectionRetry<T>(
   authAlias: string | undefined,
-  operation: (instance: ServiceNowInstance) => Promise<T>
+  operation: (instance: ServiceNowInstance) => Promise<T>,
+  options?: ConnectionOptions
 ): Promise<T> {
-  const snInstance = await getServiceNowInstance(authAlias);
+  const snInstance = await getServiceNowInstance(authAlias, options);
   try {
     return await operation(snInstance);
   } catch (error) {
+    if (isRetryableError(error) && options?.retry === false) {
+      // Not replayed (the operation may have landed), but the failed connection is not reused either.
+      log.warn("Connection error on an operation that is not retried; dropping the connection", { error });
+      // Only if it is still the cached one: a concurrent caller may already have replaced it with a fresh one.
+      const key = cacheKey(resolveAlias(authAlias), options);
+      if (instanceCache.get(key)?.instance === snInstance) instanceCache.delete(key);
+      throw error;
+    }
     if (isRetryableError(error)) {
       // The error went into the message before, unredacted — an auth or HTTP failure
       // here carries a live session. As metadata it goes through redaction.
       log.warn("Retryable error, refreshing session and retrying", { error });
-      clearInstance(authAlias);
-      const freshInstance = await getServiceNowInstance(authAlias);
+      clearInstance(authAlias, options);
+      const freshInstance = await getServiceNowInstance(authAlias, options);
       return await operation(freshInstance);
     }
     throw error;

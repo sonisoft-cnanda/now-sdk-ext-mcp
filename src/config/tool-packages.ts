@@ -1,7 +1,7 @@
 /**
  * Tool packages — named subsets of the tool surface.
  *
- * All 86 tools are registered by default, and their descriptions are long by
+ * Every tool is registered by default, and their descriptions are long by
  * design (`execute_script`'s runs to about thirteen lines, because it has to
  * teach scoped-vs-global name qualification). That is a fixed cost paid on every
  * session, and model tool-selection accuracy degrades as the option count grows.
@@ -33,6 +33,18 @@ export interface ToolPackage {
     tools: string[];
 }
 
+/** Every ACL and role-elevation tool: reading ACLs, and changing them into an application's update set. */
+const ACL_TOOLS = [
+    "list_acls",
+    "get_acl",
+    "get_role_elevation",
+    "create_acl",
+    "update_acl",
+    "delete_acl",
+    "add_acl_role",
+    "remove_acl_role",
+];
+
 export const TOOL_PACKAGES: Record<string, ToolPackage> = {
     full: {
         description: "Every tool. The default when MCP_TOOL_PACKAGE is unset.",
@@ -51,7 +63,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
     developer: {
         description:
             "Building and debugging on an instance: scripts, schema, source sync, " +
-            "update sets, scope, logs and code search.",
+            "update sets, scope, ACLs, logs and code search.",
         tools: [
             "execute_script",
             "query_table",
@@ -87,6 +99,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "find_task",
             "export_record_xml",
             "import_records_xml",
+            ...ACL_TOOLS,
         ],
     },
 
@@ -120,7 +133,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
 
     admin: {
         description:
-            "Instance administration: users and groups, plugins, health, logs, and " +
+            "Instance administration: users and groups, ACLs, plugins, health, logs, and " +
             "scripting. Deliberately includes execute_script — an admin package " +
             "without it is not an admin package.",
         tools: [
@@ -139,6 +152,7 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "validate_app_install",
             "install_store_app",
             "update_store_app",
+            ...ACL_TOOLS,
             // Pending NEX-38.
             "find_user",
             "list_users",

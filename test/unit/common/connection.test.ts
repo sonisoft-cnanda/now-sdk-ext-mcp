@@ -29,7 +29,7 @@ jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
 // Dynamic imports after mocks are set up (required for ESM)
 const { getCredentials } = await import('@servicenow/sdk-cli/dist/auth/index.js')
 const { ServiceNowInstance } = await import('@sonisoft/now-sdk-ext-core')
-const { getServiceNowInstance, withConnectionRetry } = await import('../../../src/common/connection.js')
+const { getServiceNowInstance, withConnectionRetry, clearInstance } = await import('../../../src/common/connection.js')
 
 const mockGetCredentials = getCredentials as jest.MockedFunction<typeof getCredentials>
 
@@ -106,6 +106,32 @@ describe('getServiceNowInstance', () => {
     expect(first).toBe(second)
     // getCredentials should only be called once for the same alias
     expect(mockGetCredentials).toHaveBeenCalledTimes(1)
+  })
+
+  it('caches an elevated instance apart from the plain one, and passes the roles on', async () => {
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'admin', password: 'secret', instanceUrl: 'https://elevated.service-now.com',
+    })
+
+    const plain = await getServiceNowInstance('elevated-test')
+    const elevated = await getServiceNowInstance('elevated-test', { elevatedRoles: ['security_admin'] })
+
+    expect(elevated).not.toBe(plain)
+    expect((plain as any)._settings.elevatedRoles).toBeUndefined()
+    expect((elevated as any)._settings.elevatedRoles).toEqual(['security_admin'])
+    // Each is reused on its own: a plain call never gets the elevated instance.
+    expect(await getServiceNowInstance('elevated-test')).toBe(plain)
+    expect(await getServiceNowInstance('elevated-test', { elevatedRoles: ['security_admin'] })).toBe(elevated)
+    expect(await getServiceNowInstance('elevated-test', { elevatedRoles: [] })).toBe(plain)
+  })
+
+  it('reuses one elevated instance whatever the order of its roles', async () => {
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'admin', password: 'secret', instanceUrl: 'https://order.service-now.com',
+    })
+    const ab = await getServiceNowInstance('order-test', { elevatedRoles: ['b_role', 'a_role'] })
+    expect(await getServiceNowInstance('order-test', { elevatedRoles: ['a_role', 'b_role'] })).toBe(ab)
+    expect(await getServiceNowInstance('order-test', { elevatedRoles: ['a_role'] })).not.toBe(ab)
   })
 
   it('should maintain separate cache entries for different aliases', async () => {
@@ -207,5 +233,53 @@ describe('getServiceNowInstance', () => {
     expect(operation).toHaveBeenCalledTimes(2)
     expect(mockGetCredentials.mock.calls).toEqual([[alias], [alias]])
     expect(operation.mock.calls[0]![0]).not.toBe(operation.mock.calls[1]![0])
+  })
+
+  it('does not replay an operation that asks for no retry', async () => {
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'fixture-user', password: 'fabricated', instanceUrl: 'https://fixture.invalid',
+    })
+    const error = Object.assign(new Error('ECONNRESET'), { code: 'ECONNRESET' })
+    const operation = jest.fn<(instance: InstanceType<typeof ServiceNowInstance>) => Promise<string>>().mockRejectedValue(error)
+    const first = await getServiceNowInstance('no-retry', { elevatedRoles: ['security_admin'] })
+    await expect(withConnectionRetry('no-retry', operation, { elevatedRoles: ['security_admin'], retry: false })).rejects.toBe(error)
+    expect(operation).toHaveBeenCalledTimes(1)
+    // The failed connection is dropped: the next call builds a fresh one.
+    expect(await getServiceNowInstance('no-retry', { elevatedRoles: ['security_admin'] })).not.toBe(first)
+  })
+
+  it('keeps a connection a concurrent caller already replaced when a no-retry operation fails', async () => {
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'fixture-user', password: 'fabricated', instanceUrl: 'https://fixture.invalid',
+    })
+    const options = { elevatedRoles: ['security_admin'], retry: false }
+    let replacement: unknown
+    const error = Object.assign(new Error('ECONNRESET'), { code: 'ECONNRESET' })
+    const operation = jest.fn<(instance: InstanceType<typeof ServiceNowInstance>) => Promise<string>>().mockImplementation(async () => {
+      // Another caller's failure evicted this connection and a third built a fresh one, before this one fails.
+      clearInstance('concurrent', options)
+      replacement = await getServiceNowInstance('concurrent', options)
+      throw error
+    })
+    await expect(withConnectionRetry('concurrent', operation, options)).rejects.toBe(error)
+    expect(operation).toHaveBeenCalledTimes(1)
+    expect(await getServiceNowInstance('concurrent', options)).toBe(replacement)
+  })
+
+  it('retries an elevated operation on a fresh elevated instance, leaving the plain one cached', async () => {
+    const alias = 'retry-elevated'
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'fixture-user', password: 'fabricated', instanceUrl: 'https://fixture.invalid',
+    })
+    const plain = await getServiceNowInstance(alias)
+    const error = Object.assign(new Error('ECONNRESET'), { code: 'ECONNRESET' })
+    const operation = jest.fn<(instance: InstanceType<typeof ServiceNowInstance>) => Promise<string>>()
+      .mockRejectedValueOnce(error).mockResolvedValueOnce('recovered')
+
+    await expect(withConnectionRetry(alias, operation, { elevatedRoles: ['security_admin'] })).resolves.toBe('recovered')
+
+    for (const [instance] of operation.mock.calls) expect((instance as any)._settings.elevatedRoles).toEqual(['security_admin'])
+    expect(operation.mock.calls[0]![0]).not.toBe(operation.mock.calls[1]![0])
+    expect(await getServiceNowInstance(alias)).toBe(plain)
   })
 })
