@@ -43,6 +43,7 @@ import {
 } from "../tools/workflow-read.js";
 import { registerRepairStoreAppTool } from "../tools/store-repair.js";
 import { registerGetFlowDefinitionTool, registerSendFlowMessageTool } from "../tools/flow-design.js";
+import { registerCreateBrowserSessionTool, registerDeleteBrowserSessionTool } from "../tools/browser-session.js";
 import {
   registerDebugFlowBreakpointsTool,
   registerDebugFlowCancelTool,
@@ -241,6 +242,9 @@ export const TOOL_REGISTRY: Record<string, ToolRegistrar> = {
   // ---- flow design and messages
   get_flow_definition: registerGetFlowDefinitionTool,
   send_flow_message: registerSendFlowMessageTool,
+  // ---- browser sessions for Playwright
+  create_browser_session: registerCreateBrowserSessionTool,
+  delete_browser_session: registerDeleteBrowserSessionTool,
   // ---- flow debugger (Workflow Studio Test > Debug)
   debug_flow_breakpoints: registerDebugFlowBreakpointsTool,
   debug_flow_cancel: registerDebugFlowCancelTool,

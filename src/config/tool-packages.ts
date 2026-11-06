@@ -143,6 +143,9 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "import_records_xml",
             ...ACL_TOOLS,
             ...METADATA_TOOLS,
+            // Checking a change in the browser (Playwright) starts from a session.
+            "create_browser_session",
+            "delete_browser_session",
         ],
     },
 
