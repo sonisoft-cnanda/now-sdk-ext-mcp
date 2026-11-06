@@ -4029,6 +4029,26 @@ Send a message to a paused execution waiting in a Wait For Message step, which r
 
 ---
 
+## Browser sessions (Playwright)
+
+A verified browser session for an alias, as `nex auth browser-session` mints it, for driving the UI with Playwright: core logs in with the alias's stored credential, proves the cookies authenticate without the OAuth token, and the server writes them as a Playwright storage state.
+
+> **Warning:** The session carries the user's full rights in the UI, outside this server's change policy. So `create_browser_session` needs `write` and `execute`, and `NEX_POLICY_DENY` of either refuses it. The cookies are never returned: only the file's path. Never print or commit the file, and delete it when the browser work is done.
+
+| Tool | Does |
+|------|------|
+| `create_browser_session` | Writes `<name>.json` (0600, never replacing a file) in the session directory and returns its path, the cookie count and the OAuth token's expiry. `name` is letters, digits, `-` and `_`; default the alias and a timestamp. The model never chooses a path. |
+| `delete_browser_session` | Deletes a `.json` file in the session directory, given the path `create_browser_session` returned. Local cleanup, so it is permitted under any policy. |
+
+The session directory is `NEX_BROWSER_SESSION_DIR` when the server sets it (absolute and existing, or every call is refused), otherwise a private per-user directory under the system temp directory, which must be this user's own and closed to others (0700).
+
+```js
+// Playwright, with the path create_browser_session returned
+const context = await browser.newContext({ storageState: "/tmp/nex-browser-sessions-1000/ui-check.json" });
+```
+
+---
+
 ## Flow debugger
 
 Workflow Studio's **Test > Debug**, as `nex flow debug` drives it. A debug run executes the flow's current draft **for real**: records it creates or changes are kept, so debug a copy (`copy_flow`) in a scratch app. A run is addressed by its root context id; nothing is held in the server, and `list_flow_debug_sessions` finds runs left open. Every run must be ended: run it to the end, or `debug_flow_cancel`.

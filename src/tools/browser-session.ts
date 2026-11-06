@@ -127,7 +127,10 @@ export function registerCreateBrowserSessionTool(server: McpServer): void {
           `Use it as Playwright storage state: browser.newContext({ storageState: "${path}" }), or test.use({ storageState: "${path}" }).`,
           `It carries the full rights of ${clean(alias)}'s user in the UI. Never print, read out or commit it; delete it with ` +
             "delete_browser_session when the browser work is done.",
-          ...(session.oauthExpiresAt ? [`The OAuth token behind it expires ${new Date(session.oauthExpiresAt).toISOString()}.`] : []),
+          // The SDK keeps expires_at in seconds.
+          ...(session.oauthExpiresAt
+            ? [`The OAuth token behind it expires ${new Date(session.oauthExpiresAt < 1e12 ? session.oauthExpiresAt * 1000 : session.oauthExpiresAt).toISOString()}.`]
+            : []),
           "The UI session ends at the instance's idle timeout; mint a new one then.",
         ]);
       } catch (error) {

@@ -30,7 +30,7 @@ jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
 const tools = await import('../../../src/tools/browser-session.js')
 
 const COOKIE = 'glide_session_store=SECRETVALUE'
-const minted = () => ({ alias: 'dev', instanceUrl: 'https://dev.service-now.com', createdAt: 1, oauthExpiresAt: Date.UTC(2026, 10, 7),
+const minted = () => ({ alias: 'dev', instanceUrl: 'https://dev.service-now.com', createdAt: 1, oauthExpiresAt: Date.UTC(2026, 10, 7) / 1000,
   storageState: { cookies: [{ name: 'glide_session_store', value: 'SECRETVALUE', domain: 'dev.service-now.com', path: '/', expires: -1, httpOnly: true, secure: true, sameSite: 'Lax' }], origins: [] } })
 
 let root: string, server: McpServer, client: Client
