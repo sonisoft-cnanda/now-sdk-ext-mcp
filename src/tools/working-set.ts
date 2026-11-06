@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { constants } from "node:fs";
 import { access, copyFile, link, lstat, open, realpath, rename, rm, stat } from "node:fs/promises";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   UpdateSetExportError,
@@ -61,7 +61,7 @@ function text(lines: string[]) {
 
 const WORKING_SET_REMEDIATION: Record<string, string> = {
   application_not_applied: "The set did not read back in the requested application. Inspect sys_update_set before retrying.",
-  application_not_found: "The application was not found: pass global or the sys_scope sys_id reported as previous.application.",
+  application_not_found: "Name global, a sys_scope sys_id, or a scope name that matches exactly one active application.",
   capture_count_mismatch:
     "The set holds a different number of captures than you reviewed (expected vs actual). List them again before completing.",
   capture_not_in_source: "The capture is not in the source set. Read sys_update_xml.update_set for it.",
@@ -114,7 +114,8 @@ class OutputError extends Error {
 const OUTPUT_REMEDIATION: Record<string, string> = {
   output_exists: "The output file exists. Choose another path, or replace it only if the user asked to.",
   output_invalid:
-    "The path must be absolute and end in .xml, inside NEX_EXPORT_DIR when that is set, in an existing writable directory, " +
+    "The path must be absolute and end in .xml, inside NEX_EXPORT_DIR when that is set (which must itself be absolute), " +
+    "in an existing writable directory, " +
     "and (to replace) name a regular file. Choose another path.",
   output_write_failed:
     "The export succeeded on the instance but the file could not be written (disk space or the filesystem). " +
@@ -282,8 +283,10 @@ async function checkOutput(output: string, replace: boolean): Promise<string> {
   const path = resolve(output);
   const root = process.env.NEX_EXPORT_DIR;
   if (root) {
-    const within = relative(await realpath(resolve(root)).catch(() => resolve(root)), await realpath(dirname(path)).catch(() => dirname(path)));
-    if (within.startsWith("..") || isAbsolute(within)) throw new OutputError("output_invalid");
+    // A relative root would resolve against the working directory the client chose: misconfigured, so refuse.
+    if (!isAbsolute(root)) throw new OutputError("output_invalid");
+    const within = relative(await realpath(root).catch(() => root), await realpath(dirname(path)).catch(() => dirname(path)));
+    if (within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) throw new OutputError("output_invalid");
   }
   const parent = await stat(dirname(path)).catch(() => undefined);
   if (!parent?.isDirectory()) throw new OutputError("output_invalid");

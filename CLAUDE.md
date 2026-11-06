@@ -87,6 +87,7 @@ Every tool that interacts with a ServiceNow instance should include an optional 
 | `NEX_LOG_FILE` | _(off)_ | `1`/`true` writes a log file to `$XDG_STATE_HOME/now-sdk-ext/logs`. Off by default — this server's cwd is chosen by its client |
 | `NEX_LOG_DIR` | _(state dir)_ | Directory for log files. Implies `NEX_LOG_FILE`; an explicit `NEX_LOG_FILE=0` still wins |
 | `NEX_LOG_LEVEL` | `info` | `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`. Diagnostics always go to stderr, never stdout |
+| `NEX_EXPORT_DIR` | _(unset)_ | Absolute directory `export_update_set` must write inside. Exports always need an absolute `.xml` path |
 
 ## Credential Storage
 

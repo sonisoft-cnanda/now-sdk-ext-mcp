@@ -249,17 +249,7 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           ],
         };
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error creating update set: ${message}`,
-            },
-          ],
-          isError: true,
-        };
+        return workingSetErrorText("create_update_set", error);
       }
     }
   );
@@ -316,8 +306,9 @@ export function registerSetCurrentUpdateSetTool(server: McpServer): void {
               type: "text" as const,
               text: [
                 `Working set changed (read back): ${setLine(result.updateSet)}`,
-                ...(result.previous.updateSet === sys_id
-                  ? ["It was already the working set: keep the previous working set from the earlier call to restore later."]
+                ...(result.previous.updateSet === sys_id && result.previous.application === result.current.application
+                  ? ["It was already the working set, so there is nothing to restore from this call. If an earlier call " +
+                      "reported a previous working set, restore that one when the work is done."]
                   : [
                       `Previous working set: ${workingSetLine(result.previous)}`,
                       "Restore it with restore_update_set (application, update_set) when the work is done.",

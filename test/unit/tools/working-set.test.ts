@@ -93,10 +93,16 @@ describe('set_current_update_set', () => {
     expect(ws.restoreWorkingSet).toHaveBeenCalledWith({ application: '', updateSet: '' })
   })
 
+  it('reports the previous application when only the application changed', async () => {
+    ws.useUpdateSet.mockResolvedValue({ previous: { application: 'global', updateSet: SET }, current: { application: APP, updateSet: SET }, updateSet: summary(SET) })
+    const { text } = await call('set_current_update_set', { sys_id: SET })
+    expect(text).toContain(`Previous working set: application global, update set ${SET}`)
+  })
+
   it('says when the set was already the working set instead of reporting it as the previous one', async () => {
     ws.useUpdateSet.mockResolvedValue({ previous: { application: APP, updateSet: SET }, current: { application: APP, updateSet: SET }, updateSet: summary(SET) })
     const { text } = await call('set_current_update_set', { sys_id: SET })
-    expect(text).toContain('It was already the working set')
+    expect(text).toContain('nothing to restore from this call')
     expect(text).not.toContain('Previous working set')
   })
 
@@ -207,14 +213,25 @@ describe('export_update_set', () => {
     expect(exportUpdateSet).not.toHaveBeenCalled()
   })
 
-  it('leaves no temporary or partial file when the write fails', async () => {
+  it('says the export already ran when the directory stopped being writable meanwhile', async () => {
     exportUpdateSet.mockImplementation(async () => { chmodSync(dir, 0o500); return result })
     try {
       const { text } = await call('export_update_set', { sys_id: SET, output: join(dir, 'late.xml') })
-      expect(text).toMatch(/output_invalid|output_write_failed/)
+      expect(text).toContain('output_invalid')
       expect(text).toContain('The export already ran on the instance')
     } finally { chmodSync(dir, 0o700) }
     expect(readdirSync(dir)).toEqual([])
+  })
+
+  it('refuses a relative NEX_EXPORT_DIR, and accepts a subdirectory whose name starts with dots', async () => {
+    process.env.NEX_EXPORT_DIR = 'exports'
+    try { expect((await call('export_update_set', { sys_id: SET, output: join(dir, 'a.xml') })).text).toContain('output_invalid') }
+    finally { delete process.env.NEX_EXPORT_DIR }
+    const dots = join(dir, '..drafts'); mkdirSync(dots)
+    process.env.NEX_EXPORT_DIR = dir
+    exportUpdateSet.mockResolvedValue(result)
+    try { expect((await call('export_update_set', { sys_id: SET, output: join(dots, 'a.xml') })).isError).toBe(false) }
+    finally { delete process.env.NEX_EXPORT_DIR }
   })
 
   it('replaces only when asked, and explains an incomplete set', async () => {

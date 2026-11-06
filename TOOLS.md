@@ -1415,8 +1415,8 @@ Put back the working set that `set_current_update_set` reported as previous. If 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
-| `application` | string | **Yes** | — | `global` or a sys_scope sys_id (`previous.application`). |
-| `update_set` | string | **Yes** | — | The update set sys_id (`previous.updateSet`). |
+| `application` | string | **Yes** | — | `previous.application`: `global`, a sys_scope sys_id, or `""` when none was saved. |
+| `update_set` | string | **Yes** | — | `previous.updateSet`: a sys_id, or `""` when none was saved. |
 
 ---
 
