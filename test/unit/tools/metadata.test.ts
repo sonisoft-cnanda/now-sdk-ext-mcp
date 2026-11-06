@@ -232,6 +232,31 @@ describe('layouts', () => {
     expect(r.text).toContain('the save created one')
   })
 
+  it('never lists a layout longer than a save can replace', async () => {
+    const many = Array.from({ length: 501 }, (_, i) => `f${i}`)
+    formLayout.getFormLayout.mockResolvedValue({ section: SECTION, table: 'incident', view: '', caption: '', scope: 'global', elements: many })
+    let r = await call('get_form_layout', { section: SECTION })
+    expect(r.text).toContain('Elements: 501, more than set_form_layout can replace (500). Change this section in the Form Layout UI.')
+    expect(r.text).not.toContain('f499')
+    listLayout.getListLayout.mockResolvedValue({ table: 'incident', view: '', exists: true, columns: many.slice(0, 201) })
+    r = await call('get_list_layout', { table: 'incident' })
+    expect(r.text).toContain('Columns: 201, more than set_list_layout can replace (200)')
+    formLayout.getFormLayout.mockResolvedValue({ section: SECTION, table: 'incident', view: '', caption: '', scope: 'global', elements: many.slice(0, 500) })
+    expect((await call('get_form_layout', { section: SECTION })).text).toContain('f499')
+  })
+
+  it('points to the update set when core gives no detail, and says nothing was posted when nothing was', async () => {
+    listLayout.setListLayout.mockRejectedValue(new MetadataScopeError('invalid_input'))
+    let r = await call('set_list_layout', { table: 'incident', columns: ['number'], scope: 'global', update_set: SET })
+    expect(r.text).toContain('The update set may not exist')
+    listLayout.setListLayout.mockRejectedValue(new MetadataVerificationError('session_changed', 'sys_ui_list', REC, undefined, [], false))
+    r = await call('set_list_layout', { table: 'incident', columns: ['number'], scope: 'global', update_set: SET })
+    expect(r.text).toContain('session_changed: nothing was posted')
+    columns.removeColumn.mockRejectedValue(new MetadataScopeError('delete_not_supported'))
+    r = await call('remove_table_column', { table: 't', column: 'u_x', confirm: 't.u_x', scope: 'global', update_set: SET })
+    expect(r.text).toContain('Delete Column action')
+  })
+
   it('says a read failure is only a read failure', async () => {
     listLayout.getListLayout.mockRejectedValue(new Error('socket hang up'))
     const r = await call('get_list_layout', { table: 'incident' })

@@ -37,9 +37,6 @@ const NO_CONTROL = /^[^\p{Cc}]*$/u;
 const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
 const cleanMessage = (text: string): string =>
   redactMessage(text).replace(/<[^>]*>/g, "[omitted]").replace(/<[^>]*$/, "[omitted]").replace(/\p{Cc}/gu, " ").slice(0, 500);
-/** Instance lists are shown in full up to a bound, then counted. */
-const bounded = (items: string[], max = 200): string =>
-  items.length > max ? `${items.slice(0, max).join(", ")}, ... (${items.length - max} more)` : items.join(", ");
 
 function text(lines: string[]) {
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
@@ -186,7 +183,7 @@ const REMEDIATION: Record<string, string> = {
 const VERIFICATION_REMEDIATION: Record<string, string> = {
   captured_elsewhere: "The capture landed in another update set: move it with move_update_set_capture, then check the set.",
   mixed_scope_capture: "The set holds captures of another application: move them to their own set with move_update_set_capture.",
-  session_changed: "The user's working set changed during the write (another session?): check get_current_update_set before anything else.",
+  session_changed: "The user's working set changed meanwhile (another session?): check get_current_update_set before anything else.",
 };
 
 /** The update set itself was refused: not In progress, or another application's. */
@@ -213,9 +210,15 @@ export function metadataErrorText(action: string, error: unknown) {
     const detail = (error.detail ?? {}) as Record<string, unknown>;
     if (error.code === "invalid_input" && (detail.updateSetState !== undefined || detail.updateSetApplication !== undefined)) {
       lines.push(UPDATE_SET_REFUSED);
+    } else if (error.code === "invalid_input" && !error.detail && !action.startsWith("get_")) {
+      lines.push("The update set may not exist: check its sys_id with list_update_sets.");
+    } else if (error.code === "delete_not_supported" && action === "remove_table_column") {
+      lines.push("The table's Delete Column action is not the platform's standard one (it may be customised): remove the column in the UI.");
     } else if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
   } else if (error instanceof MetadataVerificationError) {
-    lines.push(`Error (${action}): ${error.code}: the write could not be verified${error.writeAttempted ? " (it was attempted)" : ""}.`);
+    lines.push(error.writeAttempted
+      ? `Error (${action}): ${error.code}: the write could not be verified (it was attempted).`
+      : `Error (${action}): ${error.code}: nothing was posted.`);
     if (error.sysId) lines.push(`Record: ${clean(error.table)} ${clean(error.sysId)}`);
     for (const message of error.messages) lines.push(`Instance said: ${cleanMessage(message)}`);
     lines.push(...captureLines(error.capture as CaptureReport | undefined));
@@ -262,7 +265,9 @@ const writeParams = {
 
 const SCOPE_NOTE =
   "Writes through the record's form in the named application and update set, then reads back the record and its capture. " +
-  "Refuses protected files, the platform's own schema tables, and access controls (use the ACL tools).";
+  "Refuses protected files, the platform's own schema tables, and access controls (use the ACL tools). Writing code (a " +
+  "script, a server condition, Jelly, a javascript: value, or switching such a record on) is refused when the session " +
+  "does not permit running scripts.";
 
 function resultLines(heading: string, result: { table: string; sysId: string; action: string; scope: { scope: string; sysId: string }; capture: CaptureReport; messages: string[] }) {
   return [
@@ -667,6 +672,9 @@ export function registerRemoveChoiceTool(server: McpServer): void {
 // Core's grammar: a field (dot-walked allowed, as get_form_layout returns them), a split marker, or a formatter.
 const ELEMENT = /^([a-z0-9_]{1,80}(\.[a-z0-9_]{1,80}){0,9}|\.begin_split|\.split|\.end_split|\.formatter\.[0-9a-f]{32})$/;
 const SPLITS = new Set([".begin_split", ".split", ".end_split"]);
+/** The most a layout save replaces; a read of a longer layout says so instead of listing it. */
+const MAX_ELEMENTS = 500;
+const MAX_COLUMNS = 200;
 
 export function registerGetFormLayoutTool(server: McpServer): void {
   server.registerTool(
@@ -682,10 +690,14 @@ export function registerGetFormLayoutTool(server: McpServer): void {
     async ({ instance, section }) => {
       try {
         const layout = await withConnectionRetry(instance, (sn) => new FormLayoutWriter(sn).getFormLayout(section));
+        const tooLong = layout.elements.length > MAX_ELEMENTS;
         return text([
           `Form section ${clean(layout.section)}: ${clean(layout.table)}, view ${clean(layout.view) || "Default"}, caption ${clean(layout.caption) || "(main)"}`,
           `Application: ${clean(layout.scope)}`,
-          `Elements (${layout.elements.length}): ${bounded(layout.elements.map(clean))}`,
+          // A save replaces the whole section: never show a shortened list it could be built from.
+          tooLong
+            ? `Elements: ${layout.elements.length}, more than set_form_layout can replace (${MAX_ELEMENTS}). Change this section in the Form Layout UI.`
+            : `Elements (${layout.elements.length}): ${layout.elements.map(clean).join(", ")}`,
         ]);
       } catch (error) {
         return metadataErrorText("get_form_layout", error);
@@ -710,7 +722,7 @@ export function registerSetFormLayoutTool(server: McpServer): void {
         elements: z
           .array(z.string().regex(ELEMENT, "a field name (dot-walked allowed), .begin_split, .split, .end_split or .formatter.<sys_id>"))
           .min(1)
-          .max(500)
+          .max(MAX_ELEMENTS)
           .refine((list) => {
             const named = list.filter((e) => !SPLITS.has(e));
             return new Set(named).size === named.length;
@@ -759,7 +771,10 @@ export function registerGetListLayoutTool(server: McpServer): void {
         return text([
           `List ${clean(layout.table)}, view ${clean(layout.view) || "Default"}: ${layout.exists ? "its own list" : "no list of its own (the parent's or the default applies)"}`,
           ...(layout.sysId ? [`List record: ${clean(layout.sysId)}; application ${clean(layout.scope)}`] : []),
-          `Columns (${layout.columns.length}): ${bounded(layout.columns.map(clean))}`,
+          // A save replaces the whole list: never show a shortened list it could be built from.
+          layout.columns.length > MAX_COLUMNS
+            ? `Columns: ${layout.columns.length}, more than set_list_layout can replace (${MAX_COLUMNS}). Change this list in the List Layout UI.`
+            : `Columns (${layout.columns.length}): ${layout.columns.map(clean).join(", ")}`,
         ]);
       } catch (error) {
         return metadataErrorText("get_list_layout", error);
@@ -784,7 +799,7 @@ export function registerSetListLayoutTool(server: McpServer): void {
         columns: z
           .array(z.string().regex(/^[a-z0-9_]{1,80}(\.[a-z0-9_]{1,80}){0,9}$/, "a field name, dot-walked as field.field"))
           .min(1)
-          .max(200)
+          .max(MAX_COLUMNS)
           .refine((list) => new Set(list).size === list.length, "each column at most once")
           .describe("The whole new column list, in order."),
         ...targetParams,

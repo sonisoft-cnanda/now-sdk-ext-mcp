@@ -116,7 +116,8 @@ export function registerPushScriptTool(server: McpServer): void {
         "field on the matching record. The file is read from the specified path " +
         "and the record is found by name in the appropriate table.\n\n" +
         "IMPORTANT: This modifies code on the ServiceNow instance. The record " +
-        "must already exist — this updates an existing script, it does not create new ones.\n\n" +
+        "must already exist — this updates an existing script, it does not create new ones. Pushing code is refused " +
+        "when the session does not permit running scripts.\n\n" +
         "Supported script types:\n" +
         "- sys_script_include (Script Include)\n" +
         "- sys_script (Business Rule)\n" +
