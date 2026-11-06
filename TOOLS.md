@@ -1510,14 +1510,14 @@ Read one access control with its roles, condition and script. The output ends wi
 
 ## get_role_elevation
 
-The elevated privilege roles (e.g. `security_admin`) the user may elevate to, as the Elevate Role dialog offers them. With `elevate`, elevates a session to those roles and proves they hold. Elevating changes no instance data, so it is a read: `NEX_POLICY_DENY` and the `readonly` package allow it.
+The elevated privilege roles (e.g. `security_admin`) the user may elevate to, as the Elevate Role dialog offers them. With `elevate`, elevates a session to `security_admin` and proves it holds. Elevating changes no instance data, so it is a read: `NEX_POLICY_DENY` and the `readonly` package allow it.
 
 ### Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
-| `elevate` | string[] | No | — | 1 to 5 roles to elevate to and prove, e.g. `["security_admin"]`. |
+| `elevate` | boolean | No | `false` | Elevate a session to `security_admin`, the role the ACL tools use, and prove it holds. |
 
 ### Example Output
 
@@ -1552,7 +1552,7 @@ Create an access control. With `roles`, the ACL is inserted inactive, given its 
 | `roles` | string[] | No | — | Role names; any one of them passes. Omit (not `[]`) for an ACL decided by its condition or script alone. |
 | `active` | boolean | No | `true` | `false` creates it inactive. |
 | `condition` | string | No | — | Encoded query condition the record must meet. |
-| `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. |
+| `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. Code on an ACL (a script, or a `javascript:` condition) needs permission to run code as well as to write: `NEX_POLICY_DENY=execute` refuses it. |
 | `admin_overrides` | boolean | No | `true` on create | Whether admin passes regardless. |
 | `decision_type` | `allow` \| `deny` | No | `allow` | Deny-Unless ACLs are checked first and grant nothing alone. |
 | `description` | string | No | — | The platform may write its own on first save. |
@@ -1615,7 +1615,7 @@ Change an access control's fields. Roles change through `add_acl_role` / `remove
 | `operation` | string | No | — | Operation name. |
 | `active` | boolean | No | — | Activate or deactivate. |
 | `condition` | string | No | — | Encoded query condition the record must meet. |
-| `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. |
+| `script` | string | No | — | Script that sets `answer`. Also turns on advanced, which shows it on the form; the platform runs it either way. Code on an ACL (a script, or a `javascript:` condition) needs permission to run code as well as to write: `NEX_POLICY_DENY=execute` refuses it. |
 | `admin_overrides` | boolean | No | — | Whether admin passes regardless. |
 | `decision_type` | `allow` \| `deny` | No | — | Deny-Unless ACLs are checked first and grant nothing alone. |
 | `description` | string | No | — | The platform may write its own on first save. |

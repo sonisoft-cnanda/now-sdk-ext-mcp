@@ -234,6 +234,10 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     list_acls: READ,
     get_acl: READ,
     get_role_elevation: READ,
+    // A script or javascript: condition on an ACL is code the instance runs at every check. That
+    // needs execute, but only when the call carries code, so it is not a static verb here (it
+    // would refuse role-only ACLs under deny-execute): core's AclManager checks write+execute
+    // against the same installed policy before writing code (core 6.18.5).
     create_acl: CREATE,
     // Repeating with the same values leaves the same ACL; the previous values are overwritten.
     update_acl: OVERWRITE,

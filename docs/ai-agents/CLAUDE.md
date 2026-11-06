@@ -938,7 +938,7 @@ query_update_records(table: "incident", query: "active=true^priority=5", data: {
 |------|---------------|-------------|
 | `list_acls` | `table`, `name`, `scope`/`scope_id`, `operation`, `type`, `active`, `elevate` | List with roles (needs one of table, name, scope) |
 | `get_acl` | `sys_id`, `elevate` | One ACL with roles, condition, script; JSON included |
-| `get_role_elevation` | `elevate` (roles) | Elevatable roles; with `elevate`, elevates a session and proves it |
+| `get_role_elevation` | `elevate` (boolean) | Elevatable roles; with `elevate`, elevates a session to security_admin and proves it |
 | `create_acl` | `scope`/`scope_id`, `update_set`, `operation`, `type`, `table`, `field`, `name`, `roles`, `condition`, `script`, `admin_overrides`, `decision_type`, `active` | Create; staged inactive until its roles are verified |
 | `update_acl` | `sys_id`, target, `active`, `condition`, `script`, `admin_overrides`, `decision_type`, `description`, `operation` | Change fields |
 | `delete_acl` | `sys_id`, `confirm` (= `sys_id`), target | Delete with its role rows |
@@ -1343,7 +1343,7 @@ Step 4: Test with execute_script
 | Create update set | `create_update_set` | `name`, `description` |
 | See who an ACL lets in | `list_acls` / `get_acl` | `table` or `sys_id` |
 | Change an ACL (security change) | `create_acl` / `update_acl` / `add_acl_role` | `scope`, `update_set` |
-| Check role elevation | `get_role_elevation` | `elevate: ["security_admin"]` |
+| Check role elevation | `get_role_elevation` | `elevate: true` |
 | Export a record | `export_record_xml` | `table`, `sys_id` |
 | Pull a script | `pull_script` | `script_name`, `script_type`, `file_path` |
 | Push a script | `push_script` | `script_name`, `script_type`, `file_path` |

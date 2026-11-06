@@ -76,7 +76,10 @@ const fieldParams = {
   script: z
     .string()
     .optional()
-    .describe("Script that sets `answer`. Also turns on advanced, so the form shows it (the platform runs it either way)."),
+    .describe(
+      "Script that sets `answer`. Also turns on advanced, so the form shows it (the platform runs it either way). " +
+        "Code on an ACL runs on the instance at every check, so setting it needs permission to run code as well as to write."
+    ),
   admin_overrides: z
     .boolean()
     .optional()
@@ -315,15 +318,13 @@ export function registerGetRoleElevationTool(server: McpServer): void {
       title: "Get Role Elevation",
       description:
         "The elevated privilege roles (e.g. security_admin) this user may elevate to, as the Elevate Role dialog offers them. " +
-        "With elevate, also elevates a session to those roles and proves they hold. Elevating changes no instance data.",
+        "With elevate, also elevates a session to security_admin and proves it holds. Elevating changes no instance data.",
       inputSchema: {
         instance: instanceParam,
         elevate: z
-          .array(z.string().regex(ROLE))
-          .min(1)
-          .max(5)
+          .boolean()
           .optional()
-          .describe('Roles to elevate to and prove, e.g. ["security_admin"].'),
+          .describe("Elevate a session to security_admin, the role the ACL tools use, and prove it holds. Ask the user first."),
       },
     },
     async ({ instance, elevate }) => {
@@ -331,7 +332,7 @@ export function registerGetRoleElevationTool(server: McpServer): void {
         const status = await withConnectionRetry(
           instance,
           (sn) => new RoleElevation(sn).status(),
-          elevate?.length ? { elevatedRoles: elevate } : undefined
+          elevate ? ELEVATED : undefined
         );
         const lines = status.available.length
           ? [

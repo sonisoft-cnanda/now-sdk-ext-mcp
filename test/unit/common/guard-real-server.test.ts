@@ -93,14 +93,17 @@ describe("wrapping a real McpServer", () => {
         const ran: string[] = [];
         const { client, server } = await createTestClientServer((s) => {
             withGuardedTool("get_role_elevation", () => ran.push("get_role_elevation"))(s);
+            withGuardedTool("list_acls", () => ran.push("list_acls"))(s);
             withGuardedTool("create_acl", () => ran.push("create_acl"))(s);
         });
 
         try {
+            // Elevated reads (elevate on list_acls / get_acl) and elevating itself are reads by decision.
             expect((await client.callTool({ arguments: {}, name: "get_role_elevation" })).isError).toBeFalsy();
+            expect((await client.callTool({ arguments: {}, name: "list_acls" })).isError).toBeFalsy();
             const refused = await client.callTool({ arguments: {}, name: "create_acl" });
             expect(refused.isError).toBe(true);
-            expect(ran).toEqual(["get_role_elevation"]);
+            expect(ran).toEqual(["get_role_elevation", "list_acls"]);
         } finally {
             await client.close();
             await server.close();

@@ -149,7 +149,7 @@ describe('reads', () => {
 
   it('reports elevation status, elevating only the roles asked for', async () => {
     mockStatus.mockResolvedValue({ available: [{ name: 'security_admin', description: 'High security' }], elevated: ['security_admin'] })
-    const { text } = await call('get_role_elevation', { elevate: ['security_admin'] })
+    const { text } = await call('get_role_elevation', { elevate: true })
     expect(options()).toEqual({ elevatedRoles: ['security_admin'] })
     expect(text).toContain('- security_admin (ELEVATED): High security')
     mockStatus.mockResolvedValue({ available: [], elevated: [] })
@@ -159,7 +159,7 @@ describe('reads', () => {
 
   it('explains not_elevatable without suggesting a workaround', async () => {
     mockStatus.mockRejectedValue(new RoleElevationError('not_elevatable', ['security_admin'], ['x_app.auditor']))
-    const { text, isError } = await call('get_role_elevation', { elevate: ['security_admin'] })
+    const { text, isError } = await call('get_role_elevation', { elevate: true })
     expect(isError).toBe(true)
     expect(text).toContain('not_elevatable (security_admin)')
     expect(text).toContain('Roles this user may elevate to: x_app.auditor')
@@ -209,7 +209,7 @@ describe('writes', () => {
       expect(r.isError).toBe(true)
     }
     expect((await call('add_acl_role', { sys_id: ACL, role: 'javascript:x', scope: 'x_app', update_set: SET })).isError).toBe(true)
-    expect((await call('get_role_elevation', { elevate: [] })).isError).toBe(true)
+    expect((await call('get_role_elevation', { elevate: ['x_other.role'] })).isError).toBe(true)
     expect(manager.create).not.toHaveBeenCalled()
     expect(manager.addRole).not.toHaveBeenCalled()
     expect(mockStatus).not.toHaveBeenCalled()
@@ -242,6 +242,13 @@ describe('writes', () => {
     expect(text).toContain(`the create of ACL ${ACL} stopped part way; the ACL is inactive (read back)`)
     expect(text).toContain('Failed step: form said [redacted]')
     expect(text).toContain('do not retry blindly')
+  })
+
+  it('strips nested and unterminated markup from the instance\'s messages', async () => {
+    manager.update.mockRejectedValue(new MetadataVerificationError('write_not_applied', ['a <b><i>x</i></b> <script src=1'], true))
+    const { text } = await call('update_acl', { sys_id: ACL, scope: 'x_app', update_set: SET, condition: 'active=true' })
+    expect(text).not.toMatch(/<b>|<i>|<\/b>/)
+    expect(text).toContain('Instance said: a [omitted][omitted]x[omitted][omitted] <script src=1')
   })
 
   it('reports unverified writes, scope and policy refusals', async () => {
