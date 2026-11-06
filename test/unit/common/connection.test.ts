@@ -262,6 +262,7 @@ describe('getServiceNowInstance', () => {
       throw error
     })
     await expect(withConnectionRetry('concurrent', operation, options)).rejects.toBe(error)
+    expect(operation).toHaveBeenCalledTimes(1)
     expect(await getServiceNowInstance('concurrent', options)).toBe(replacement)
   })
 

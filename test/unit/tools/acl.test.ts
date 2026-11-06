@@ -190,9 +190,10 @@ describe('writes', () => {
   })
 
   it('refuses malformed input before opening any connection', async () => {
-    await call('create_acl', { operation: 'read', table: 't', update_set: SET })
-    await call('add_acl_role', { sys_id: ACL, role: 'itil', scope: 'x_app', scope_id: 'b'.repeat(32), update_set: SET })
-    await call('list_acls', { scope: 'x_app', scope_id: 'b'.repeat(32) })
+    expect((await call('create_acl', { operation: 'read', table: 't', update_set: SET })).text).toContain('Name the ACL\'s application')
+    expect((await call('add_acl_role', { sys_id: ACL, role: 'itil', scope: 'x_app', scope_id: 'b'.repeat(32), update_set: SET })).text)
+      .toContain('scope or scope_id, not both')
+    expect((await call('list_acls', { scope: 'x_app', scope_id: 'b'.repeat(32) })).text).toContain('scope or scope_id, not both')
     expect(mockWithConnectionRetry).not.toHaveBeenCalled()
   })
 
