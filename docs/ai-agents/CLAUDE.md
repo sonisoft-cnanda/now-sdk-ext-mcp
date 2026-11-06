@@ -929,7 +929,7 @@ query_update_records(table: "incident", query: "active=true^priority=5", data: {
 |------|---------------|-------------|
 | `get_current_update_set` | `instance` | Get active update set |
 | `list_update_sets` | `query`, `limit` | List with filtering |
-| `create_update_set` | `name`, `description`, `application` | Create new |
+| `create_update_set` | `name`, `application` (required), `description` | Create in an application; duplicate-checked |
 | `set_current_update_set` | `sys_id` | Make it the working set; reports the previous one |
 | `restore_update_set` | `application`, `update_set` | Put the previous working set back |
 | `complete_update_set` | `sys_id`, `expected_captures` | Complete after checking the count |
@@ -1353,7 +1353,7 @@ Step 4: Test with execute_script
 | Install from company repo | `install_from_app_repo` | `scope`, `sys_id` |
 | Bulk update safely | `query_update_records` | `table`, `query`, `data`, `confirm` |
 | Bulk delete safely | `query_delete_records` | `table`, `query`, `confirm` |
-| Create update set | `create_update_set` | `name`, `description` |
+| Create update set | `create_update_set` | `name`, `application` |
 | See who an ACL lets in | `list_acls` / `get_acl` | `table` or `sys_id` |
 | Change an ACL (security change) | `create_acl` / `update_acl` / `add_acl_role` | `scope`, `update_set` |
 | Check role elevation | `get_role_elevation` | `elevate: true` |

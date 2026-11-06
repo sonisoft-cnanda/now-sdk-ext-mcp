@@ -61,6 +61,8 @@ const call = async (name: string, args: Record<string, unknown>) => {
   return { text: r.content[0].text as string, isError: r.isError === true }
 }
 const options = () => mockWithConnectionRetry.mock.calls.at(-1)![2]
+// Root passes access(W_OK) whatever the mode, so the permission tests cannot run as root.
+const asRoot = process.getuid?.() === 0
 
 describe('set_current_update_set', () => {
   it('uses the working-set path, never replays, and reports the previous set for restore', async () => {
@@ -121,9 +123,14 @@ describe('create_update_set', () => {
     expect(r.text).toContain('application_not_found')
     expect(r.text).toContain('a scope name that matches exactly one active application')
     createUpdateSet.mockRejectedValue(new Error('socket hang up'))
-    r = await call('create_update_set', { name: 'FEAT-1' })
+    r = await call('create_update_set', { name: 'FEAT-1', application: 'global' })
     expect(r.text).toContain('may have been applied')
-    expect((await call('create_update_set', { name: 'x'.repeat(81) })).isError).toBe(true)
+    createUpdateSet.mockClear()
+    for (const args of [{ name: 'x'.repeat(81), application: 'global' }, { name: '   ', application: 'global' },
+      { name: 'a\nb', application: 'global' }, { name: 'FEAT-1' }, { name: 'FEAT-1', application: 'HR Service Delivery' }]) {
+      expect((await call('create_update_set', args)).isError).toBe(true)
+    }
+    expect(createUpdateSet).not.toHaveBeenCalled()
   })
 })
 
@@ -218,7 +225,7 @@ describe('export_update_set', () => {
     expect(readFileSync(target, 'utf8')).toBe('target')
   })
 
-  ;(process.getuid?.() === 0 ? it.skip : it)('refuses a directory in the way, or an unwritable directory, before copying anything', async () => {
+  ;(asRoot ? it.skip : it)('refuses a directory in the way, or an unwritable directory, before copying anything', async () => {
     const asDir = join(dir, 'taken.xml'); mkdirSync(asDir)
     expect((await call('export_update_set', { sys_id: SET, output: asDir, replace: true })).text).toContain('output_invalid')
     const locked = join(dir, 'locked'); mkdirSync(locked); chmodSync(locked, 0o500)
@@ -228,8 +235,6 @@ describe('export_update_set', () => {
     expect(exportUpdateSet).not.toHaveBeenCalled()
   })
 
-  // Root passes access(W_OK) whatever the mode, so the permission tests cannot run as root.
-  const asRoot = process.getuid?.() === 0
   ;(asRoot ? it.skip : it)('says the export already ran when the directory stopped being writable meanwhile', async () => {
     exportUpdateSet.mockImplementation(async () => { chmodSync(dir, 0o500); return result })
     try {
@@ -241,7 +246,7 @@ describe('export_update_set', () => {
   })
 
   it('refuses every export while NEX_EXPORT_DIR is relative or missing, and says it is the server configuration', async () => {
-    for (const root of [relative(process.cwd(), dir), join(dir, 'missing')]) {
+    for (const root of [relative(process.cwd(), dir), join(dir, 'missing'), '']) {
       process.env.NEX_EXPORT_DIR = root
       try {
         const { text } = await call('export_update_set', { sys_id: SET, output: join(dir, 'a.xml') })

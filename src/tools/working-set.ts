@@ -290,7 +290,8 @@ async function checkOutput(output: string, replace: boolean): Promise<string> {
   if (!isAbsolute(output) || /[/\\]$/.test(output) || extname(output).toLowerCase() !== ".xml") throw new OutputError("output_invalid");
   const path = resolve(output);
   const root = process.env.NEX_EXPORT_DIR;
-  if (root) {
+  // Set but empty (an unexpanded template variable, say) fails closed like any other misconfiguration.
+  if (root !== undefined) {
     // A relative root would resolve against the working directory the client chose; a missing one refuses every path.
     const realRoot = isAbsolute(root) ? await realpath(root).catch(() => undefined) : undefined;
     if (!realRoot || !(await stat(realRoot).then((s) => s.isDirectory(), () => false))) {

@@ -211,19 +211,23 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           ),
         name: z
           .string()
+          .trim()
           .min(1)
           .max(80)
+          .regex(/^[^\p{Cc}]*$/u, "no control characters")
           .describe("The name of the update set to create (at most 80 characters)."),
         description: z
           .string()
+          .regex(/^[^\p{Cc}]*$/u, "no control characters")
           .optional()
           .describe("Optional description for the update set."),
         application: z
           .string()
-          .optional()
+          .regex(/^(global|[0-9a-f]{32}|[a-z0-9_]{1,40})$/i, "global, a sys_scope sys_id, or a scope name such as x_acme_app")
           .describe(
             "The application the set belongs to: global, a sys_scope sys_id, or a scope name that matches exactly one " +
-              "active application. Create the set in the application you are changing."
+              "active application (not a display name). Create the set in the application you are changing; the set is checked " +
+              "for a duplicate name there and read back."
           ),
       },
     },
@@ -239,8 +243,11 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           `Update set created successfully.`,
           ``,
           `sys_id: ${result.sys_id}`,
-          `Name: ${result.name}`,
-          `State: ${result.state}`,
+          `Name: ${String(result.name ?? "").replace(/\p{Cc}/gu, " ")}`,
+          `State: ${String(result.state ?? "").replace(/\p{Cc}/gu, " ")}`,
+          `Application: ${application}`,
+          ``,
+          "Make it the working set with set_current_update_set before changing anything.",
         ];
 
         return {

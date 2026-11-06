@@ -1356,7 +1356,7 @@ Create a new update set on the ServiceNow instance.
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
 | `name` | string | **Yes** | — | Name of the update set to create. |
 | `description` | string | No | — | Optional description for the update set. |
-| `application` | string | No | — | Optional application scope sys_id to associate the update set with. |
+| `application` | string | **Yes** | — | `global`, a sys_scope sys_id, or a scope name matching exactly one active application. The set is checked for a duplicate name there and read back. |
 
 ### Example Usage
 
