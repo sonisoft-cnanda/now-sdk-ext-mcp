@@ -223,7 +223,10 @@ function aclErrorText(action: string, error: unknown) {
     if (error.writeAttempted) lines.push("Read the ACL with get_acl before retrying.");
   } else if (error instanceof MetadataScopeError) {
     lines.push(`Error (${action}): ${error.code}${error.detail ? ` ${JSON.stringify(error.detail)}` : ""}`);
-    if (error.code === "store_scope") lines.push("An installed Store application: pass acknowledge_upgrade_skip, and only after the user's review.");
+    if (error.code === "store_scope") {
+      lines.push("The ACL belongs to an installed Store application. Changing it customizes the vendor's file, which " +
+        "upgrades then skip: stop and ask the user to review it and decide.");
+    }
     else if (error.code === "invalid_input") lines.push("Check the input the detail names. update_set must be In progress and belong to the ACL's application.");
     else if (error.code === "protected_record") lines.push("The platform protects this record from changes through its form.");
     else if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);

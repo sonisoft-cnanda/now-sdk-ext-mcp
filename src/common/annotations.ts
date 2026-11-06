@@ -227,25 +227,26 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     close_incident: SET,
     approve_change: SET,
 
-    // ---- access controls. Reads change nothing; elevating a session (get_role_elevation,
-    // elevate on a read) changes no instance data, so it is a read: a deliberate decision, so
-    // read-only sessions can still read what only security_admin may see (README: Role elevation). The writes change who
-    // may do what: creating and adding a role only add, but deactivating, removing a role
-    // or deleting can open access as well as close it, so those are destructive.
+    // ---- access controls. Reads change nothing. Elevating a session (get_role_elevation, or
+    // elevate on a read) changes no instance data, so it is a read: a deliberate decision, so a
+    // read-only session can still read what only security_admin may see (README: Role elevation).
     list_acls: READ,
     get_acl: READ,
     get_role_elevation: READ,
-    // A script or javascript: condition on an ACL is code the instance runs at every check. That
-    // needs execute, but only when the call carries code, so it is not a static verb here (it
-    // would refuse role-only ACLs under deny-execute): core's AclManager checks write+execute
-    // against the same installed policy before writing code (core 6.18.5).
+    // The writes change who may do what. Creating an ACL or adding a role only adds a way in
+    // (not destructive); updating, deleting or removing a role can open access as well as
+    // close it (destructive). Code on an ACL (a script or javascript: condition) needs execute
+    // too, but only when a call carries it, so it is not a static verb here (that would refuse
+    // role-only ACLs under deny-execute): core's AclManager checks write+execute against the
+    // same installed policy before writing code (core 6.18.5).
     create_acl: CREATE,
-    // Repeating with the same values leaves the same ACL; the previous values are overwritten.
+    // Repeating with the same values leaves the same ACL.
     update_acl: OVERWRITE,
-    delete_acl: OVERWRITE,
-    // A second call refuses (role_already_present / role_not_present): the end state settles.
-    add_acl_role: SET,
-    remove_acl_role: OVERWRITE,
+    // A repeat call is refused (acl_not_found, role_already_present, role_not_present): not
+    // idempotent, so a client must not retry them on its own.
+    delete_acl: OVERWRITE_ONCE,
+    add_acl_role: CREATE,
+    remove_acl_role: OVERWRITE_ONCE,
 
     // ---- update sets
     get_current_update_set: READ,
