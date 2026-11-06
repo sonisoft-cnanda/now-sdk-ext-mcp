@@ -210,8 +210,10 @@ export function metadataErrorText(action: string, error: unknown) {
     const detail = (error.detail ?? {}) as Record<string, unknown>;
     if (error.code === "invalid_input" && (detail.updateSetState !== undefined || detail.updateSetApplication !== undefined)) {
       lines.push(UPDATE_SET_REFUSED);
+    } else if (error.code === "invalid_input" && !error.detail && action.endsWith("list_layout")) {
+      lines.push("The view or the update set may not exist: check the view on sys_ui_view and the set with list_update_sets.");
     } else if (error.code === "invalid_input" && !error.detail && !action.startsWith("get_")) {
-      lines.push("The update set may not exist: check its sys_id with list_update_sets.");
+      lines.push("A value was refused, or the update set may not exist: check the names given and the set with list_update_sets.");
     } else if (error.code === "delete_not_supported" && action === "remove_table_column") {
       lines.push("The table's Delete Column action is not the platform's standard one (it may be customised): remove the column in the UI.");
     } else if (REMEDIATION[error.code]) lines.push(REMEDIATION[error.code]);
@@ -408,7 +410,7 @@ export function registerAddTableColumnTool(server: McpServer): void {
       inputSchema: {
         instance: instanceParam,
         table: z.string().regex(IDENT).describe("The table."),
-        column: z.string().regex(IDENT).describe("The column name, lower case."),
+        column: z.string().regex(/^[a-z][a-z0-9_]{0,79}$/).describe("The column name, lower case."),
         label: z
           .string()
           .trim()
@@ -476,7 +478,7 @@ export function registerRemoveTableColumnTool(server: McpServer): void {
       inputSchema: {
         instance: instanceParam,
         table: z.string().regex(IDENT).describe("The table."),
-        column: z.string().regex(IDENT).describe("The column name, prefix included (u_ in Global)."),
+        column: z.string().regex(/^[a-z][a-z0-9_]{0,79}$/).describe("The column name, prefix included (u_ in Global)."),
         confirm: z.string().describe("Type <table>.<column> exactly, to confirm the removal."),
         acknowledge_data_loss: z
           .boolean()
@@ -535,7 +537,7 @@ const choiceParams = {
   instance: instanceParam,
   table: z.string().regex(IDENT).describe("The table."),
   column: z.string().regex(IDENT).describe("The column, prefix included (u_ in Global)."),
-  language: z.string().regex(/^[a-z]{2}(-[a-z]{2})?$/i).optional().describe("Choice language; en when omitted."),
+  language: z.string().regex(/^[a-z][a-z_]{1,9}$/i).optional().describe("Choice language (sys_choice.language, e.g. en, pb); en when omitted."),
 };
 const choiceValue = z
   .string()
