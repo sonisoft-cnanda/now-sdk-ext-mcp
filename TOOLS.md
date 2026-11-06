@@ -4029,6 +4029,37 @@ Send a message to a paused execution waiting in a Wait For Message step, which r
 
 ---
 
+## Flow debugger
+
+Workflow Studio's **Test > Debug**, as `nex flow debug` drives it. A debug run executes the flow's current draft **for real**: records it creates or changes are kept, so debug a copy (`copy_flow`) in a scratch app. A run is addressed by its root context id; nothing is held in the server, and `list_flow_debug_sessions` finds runs left open. Every run must be ended: run it to the end, or `debug_flow_cancel`.
+
+Starting and stepping need `execute` as well as `write`; breakpoints and cancel need only `write`, so a run can still be cancelled under `NEX_POLICY_DENY=execute`. Calls that move a run are never replayed after a transport error. Waits default to 45 seconds, under the 60-second request timeout many clients use. Run data (names, step labels, inputs and outputs) is fenced as data and redacted; values over 200 characters are cut unless `full`.
+
+| Tool | Does | Needs |
+|------|------|-------|
+| `debug_flow_start` | Start a run (`flow`: sys_id or `scope.internal_name`; `inputs`; optional `breakpoints` by step number) and leave it paused before its first step. Returns the context id, the steps it can stop at, and where it is. | execute, write |
+| `debug_flow_run_to` | Start, run to the first of `breakpoints`, report every step's data there, then `after`: `cancel` (default), `resume` to the end, or `stay` paused. | execute, write |
+| `debug_flow_step` | Move a paused run: `over` (default), `into` a subflow (later calls apply to its child context), `out`, `resume`, or `skip_all`. | execute, write |
+| `debug_flow_inspect` | Without moving it: `snapshot` (default), `steps` (every step's inputs and outputs, or one `step`), `locations`, or `breakpoints`. | read |
+| `debug_flow_breakpoints` | Exactly one change: `set`, `add` and/or `remove`, or `clear`. Steps are checked against the debugger's own list; an invalid one is refused with the valid steps. | write |
+| `debug_flow_cancel` | End the run and any subflow it stepped into, and read it back. Safe to repeat; refuses a context the debugger did not start, so it cannot end a real flow run. | write |
+| `list_flow_debug_sessions` | Runs still open (paused, waiting or running), newest first; optional `created_by` and `limit`. | read |
+
+### Example: one call
+
+```json
+{
+  "name": "debug_flow_run_to",
+  "arguments": {
+    "flow": "x_myapp.create_task_copy",
+    "inputs": { "table": "incident", "field_values": "short_description=Debug" },
+    "breakpoints": [3]
+  }
+}
+```
+
+---
+
 ## test_flow
 
 Test a ServiceNow Flow Designer flow without requiring it to be published. This is the **primary tool to use when building and iterating on a flow** — it invokes the same API as the 'Test' button in Flow Designer, running the flow in its current saved (draft) state.
