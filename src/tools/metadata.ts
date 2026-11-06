@@ -9,7 +9,6 @@ import {
   MetadataScopeError,
   MetadataVerificationError,
   isPolicyRefusal,
-  redactMessage,
   type CaptureReport,
   type Choice,
   type MetadataScopeRef,
@@ -18,7 +17,7 @@ import {
 import { withConnectionRetry } from "../common/connection.js";
 import { annotationsFor } from "../common/annotations.js";
 import { instanceParam } from "./working-set.js";
-import { stripMarkup } from "../common/tool-text.js";
+import { clean, cleanMessage, text } from "../common/tool-text.js";
 
 /**
  * Application metadata written through the platform's forms, as `nex metadata` does: core's writers check the
@@ -34,16 +33,8 @@ const IDENT = /^[a-z0-9_]{1,80}$/;
 const SYS_ID = /^[0-9a-f]{32}$/;
 const NO_CONTROL = /^[^\p{Cc}]*$/u;
 
-// Values come from the instance: one line each, no control characters (markup stripped from free text).
-const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
-export { stripMarkup };
 
 // Markup is stripped before redaction, so a secret split by a tag (sec<b>ret</b>) is redacted whole.
-const cleanMessage = (text: string): string => redactMessage(stripMarkup(text)).replace(/\p{Cc}/gu, " ").slice(0, 500);
-
-function text(lines: string[]) {
-  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
-}
 
 /** Where a write goes: the record's application and an In progress update set of it. */
 const targetParams = {

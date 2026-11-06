@@ -83,7 +83,16 @@ export function registerRepairStoreAppTool(server: McpServer): void {
           .regex(/^([0-9a-f]{32}|[a-z0-9_]{1,40})$/, "a sys_store_app sys_id or a scope name")
           .describe("The installed application: its scope (e.g. sn_grc) or its sys_store_app sys_id."),
         load_demo_data: z.boolean().optional().describe("Also load the application's demo data. Refused when it has none."),
-        timeout_minutes: z.number().int().min(1).max(120).optional().describe("How long to wait for the repair. Default 30."),
+        timeout_minutes: z
+          .number()
+          .int()
+          .min(1)
+          .max(120)
+          .optional()
+          .describe(
+            "How long to wait for the repair. Default 30. Progress is reported while waiting; a client that does not reset " +
+              "its timeout on progress may give up first, and the repair then keeps running: check sys_execution_tracker."
+          ),
       },
     },
     async ({ instance, app, load_demo_data, timeout_minutes }, extra) => {

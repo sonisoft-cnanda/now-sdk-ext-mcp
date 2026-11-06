@@ -213,7 +213,7 @@ export function registerConvertWorkflowTool(server: McpServer): void {
         include_fluent: z.boolean().optional().describe("Include the generated Fluent source files. Default true."),
         directory: z
           .string()
-          .regex(/^[a-zA-Z0-9_./-]{1,200}$/)
+          .regex(/^[a-zA-Z0-9_][a-zA-Z0-9_./-]{0,199}$/, "a relative path")
           .refine((d) => !d.split("/").includes(".."), "no ..")
           .optional()
           .describe("Folder inside the app the skeleton is laid out for. Default src/fluent/flows."),
@@ -304,7 +304,7 @@ export function registerListWorkflowActivityTypesTool(server: McpServer): void {
           const wm = new WorkflowManager(sn);
           if (!type) {
             const types = await wm.listActivityDefinitions({ name, category, includeDesigner: core_only !== true });
-            return [`${types.length} activity type(s)`, ...types.map((t) => `- ${clean(t.name)} (${t.sysId}) [${clean(t.category)}] ${clean(t.sysClassName)}`)].join("\n");
+            return [`${types.length} activity type(s)`, ...types.map((t) => `- ${clean(t.name)} (${clean(t.sysId)}) [${clean(t.category)}] ${clean(t.sysClassName)}`)].join("\n");
           }
           if (usage_sample) return JSON.stringify(await wm.getActivityUsage(type, { sampleSize: usage_sample }), null, 2);
           return JSON.stringify(await wm.getActivityDefinition(type, { includeScript: include_script === true }), null, 2);
