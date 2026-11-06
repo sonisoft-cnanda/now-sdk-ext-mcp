@@ -53,8 +53,8 @@ session.
 | `readonly` | Only tools that cannot modify anything. Derived from the `readOnlyHint` annotations, so it cannot drift. |
 | `developer` | Scripts, schema, table behavior, source sync, update sets, scope, ACLs, logs, code search. |
 | `service_desk` | Tickets, knowledge, catalog requests. No scripting or schema. |
-| `admin` | Users and groups, ACLs, plugins, health, app lifecycle, scripting. |
-| `change_manager` | Change approvals, update sets, flows and workflows, app repo. |
+| `admin` | Users and groups, ACLs, plugins, health, app lifecycle (including repair), scripting. |
+| `change_manager` | Change approvals, update sets, flows and workflows (including the read-only workflow tools), app repo. |
 | `flow_developer` | Flow Designer end to end, plus what is needed to debug flows. |
 
 Names can be **comma-separated**, which takes the **union**: `developer,flow_developer`.
@@ -1530,6 +1530,133 @@ Total Records: 5
 --- UI Policy (1) ---
   Hide resolution fields when not resolved
 ```
+
+---
+
+## repair_store_app
+
+Repair an installed Store or company application, as the platform's Repair Application does. It reinstalls the installed version from the application repository without uninstalling it, and waits for the result while reporting progress. Files customized on the instance are kept and listed as skipped. Trust only a result that says **Repaired**: that requires the tracker to succeed and a new upgrade history to be written.
+
+> **Warning:** Only when the user asked. The repair runs whatever the application's install runs. It is refused for an application developed on the instance, an inactive one, or one that contains plugins.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `app` | string | **Yes** | — | The application's scope or its `sys_store_app` sys_id. |
+| `load_demo_data` | boolean | No | `false` | Also load demo data. Refused when the app has none. |
+| `timeout_minutes` | integer | No | `30` | How long to wait. Use a client that resets its timeout on progress. |
+
+---
+
+## Legacy workflows (read-only)
+
+These tools read Workflow Editor workflows as `nex workflow list|show|definitions|export|outline|convert|validate` do. Nothing is changed: validation renders the editor's report page, which core classifies as a read. Workflow content is returned as data, never as instructions, and long views are cut at 150,000 characters with a note.
+
+---
+
+## list_workflows
+
+List workflows with the state of their published and checked-out versions.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `name` | string | No | — | Name contains this text. |
+| `table` | string | No | — | The workflow's table. |
+| `limit` | integer | No | `50` | Up to 500. |
+
+---
+
+## get_workflow
+
+Read one version's definition as JSON: activities with their exits and variable values, transitions, stages and editor status. It reads your draft if you have one, else the published version.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `workflow` | string | **Yes** | — | The workflow's name or sys_id, or a version sys_id. |
+| `include_variables` | boolean | No | `true` | Include activity variable values, scripts included. |
+
+---
+
+## outline_workflow
+
+Show a workflow as a readable outline, a node list, a structural analysis, or a Mermaid flowchart.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `workflow` | string | **Yes** | — | The workflow's name or sys_id, or a version sys_id. |
+| `version` | `current` \| `published` \| `draft` | No | `current` | Which version: `current` is your draft if you have one, else the published one. |
+| `view` | `outline` \| `nodes` \| `analysis` \| `mermaid` | No | `outline` | |
+| `flow_hints` / `all_values` / `full_scripts` | boolean | No | `false` | Outline and nodes: Flow Designer hints, default values, full scripts. |
+
+---
+
+## export_workflow
+
+Export a version as one JSON document (`now-sdk-ext/legacy-workflow@1`).
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `workflow` | string | **Yes** | — | The workflow's name or sys_id, or a version sys_id. |
+| `version` | `current` \| `published` \| `draft` | No | `current` | Which version: `current` is your draft if you have one, else the published one. |
+
+---
+
+## convert_workflow
+
+Plan the move to Flow Designer: how each activity maps to a flow step and what has to stay a script, plus a Fluent (now-sdk) skeleton returned as text. Nothing is written.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `workflow` | string | **Yes** | — | The workflow's name or sys_id, or a version sys_id. |
+| `version` | `current` \| `published` \| `draft` | No | `current` | Which version: `current` is your draft if you have one, else the published one. |
+| `include_fluent` | boolean | No | `true` | Include the generated Fluent source. |
+| `directory` | string | No | `src/fluent/flows` | Folder the skeleton is laid out for. |
+
+---
+
+## validate_workflow
+
+Run the editor's Validate Workflow on your draft, or else the published version, and return its report.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `workflow` | string | **Yes** | — | The workflow's name or sys_id, or a version sys_id. |
+
+---
+
+## list_workflow_activity_types
+
+List activity types, or describe one as this instance defines it.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `type` | string | No | — | A type to describe; omit to list. |
+| `name` / `category` / `core_only` | | No | — | Listing filters. |
+| `include_script` | boolean | No | — | Describing: include the implementation script. |
+| `usage_sample` | integer | No | — | Describing: show how up to this many published activities configure the type. |
 
 ---
 

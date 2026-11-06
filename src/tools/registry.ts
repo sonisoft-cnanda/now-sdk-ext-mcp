@@ -33,6 +33,16 @@ import {
   registerUpdateMetadataRecordTool,
 } from "../tools/metadata.js";
 import {
+  registerConvertWorkflowTool,
+  registerExportWorkflowTool,
+  registerGetWorkflowTool,
+  registerListWorkflowActivityTypesTool,
+  registerListWorkflowsTool,
+  registerOutlineWorkflowTool,
+  registerValidateWorkflowTool,
+} from "../tools/workflow-read.js";
+import { registerRepairStoreAppTool } from "../tools/store-repair.js";
+import {
   registerAddAclRoleTool,
   registerCreateAclTool,
   registerDeleteAclTool,
@@ -207,6 +217,16 @@ export const TOOL_REGISTRY: Record<string, ToolRegistrar> = {
   set_form_layout: registerSetFormLayoutTool,
   set_list_layout: registerSetListLayoutTool,
   update_metadata_record: registerUpdateMetadataRecordTool,
+  // ---- legacy workflows, read-only
+  convert_workflow: registerConvertWorkflowTool,
+  export_workflow: registerExportWorkflowTool,
+  get_workflow: registerGetWorkflowTool,
+  list_workflow_activity_types: registerListWorkflowActivityTypesTool,
+  list_workflows: registerListWorkflowsTool,
+  outline_workflow: registerOutlineWorkflowTool,
+  validate_workflow: registerValidateWorkflowTool,
+  // ---- store application repair
+  repair_store_app: registerRepairStoreAppTool,
   // ---- access controls and role elevation
   add_acl_role: registerAddAclRoleTool,
   create_acl: registerCreateAclTool,

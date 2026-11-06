@@ -96,6 +96,14 @@ All tools at a glance:
 | `inspect_update_set` | Inspect update set contents grouped by type |
 | `clone_update_set` | Clone an update set (lossy: drops application, action, table; not for promotion) |
 | `move_update_set_records` | Move records between update sets (unverified; prefer `move_update_set_capture`) |
+| **Legacy Workflows (read-only)** | |
+| `list_workflows` / `get_workflow` / `export_workflow` | Find and read Workflow Editor workflows |
+| `outline_workflow` | Outline, node list, analysis or Mermaid view |
+| `convert_workflow` | Plan the move to Flow Designer, with a Fluent skeleton |
+| `validate_workflow` | The editor's validation report |
+| `list_workflow_activity_types` | Activity types and how this instance defines one |
+| **Store Repair** | |
+| `repair_store_app` | Reinstall an installed app's version from the repository; trust only "Repaired" |
 | **Application Metadata** | |
 | `insert_metadata_record` / `update_metadata_record` / `delete_metadata_record` | Write metadata through its form in a named application and set; verified |
 | `add_table_column` / `remove_table_column` | Add or remove a column (working set required to add) |
