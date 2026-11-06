@@ -211,7 +211,9 @@ export async function withConnectionRetry<T>(
     if (isRetryableError(error) && options?.retry === false) {
       // Not replayed (the operation may have landed), but the failed connection is not reused either.
       log.warn("Connection error on an operation that is not retried; dropping the connection", { error });
-      clearInstance(authAlias, options);
+      // Only if it is still the cached one: a concurrent caller may already have replaced it with a fresh one.
+      const key = cacheKey(resolveAlias(authAlias), options);
+      if (instanceCache.get(key)?.instance === snInstance) instanceCache.delete(key);
       throw error;
     }
     if (isRetryableError(error)) {

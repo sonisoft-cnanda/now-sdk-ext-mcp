@@ -28,6 +28,6 @@ describe('core refuses code on an ACL under an execute deny', () => {
     // that it got that far rather than being refused by policy.
     const error = await new AclManager(instance()).create({ ...target, operation: 'read', table: 't', roles: ['itil'] }).catch(e => e)
     expect(isPolicyRefusal(error)).toBe(false)
-    expect(String(error?.message ?? error)).toMatch(/credential|auth|alias|login|session/i)
+    expect(error?.code).toMatch(/^NEX_AUTH_/)
   })
 })

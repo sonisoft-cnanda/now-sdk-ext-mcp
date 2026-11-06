@@ -228,7 +228,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     approve_change: SET,
 
     // ---- access controls. Reads change nothing; elevating a session (get_role_elevation,
-    // elevate on a read) changes no instance data, so it is a read. The writes change who
+    // elevate on a read) changes no instance data, so it is a read: a deliberate decision, so
+    // read-only sessions can still read what only security_admin may see (README: Role elevation). The writes change who
     // may do what: creating and adding a role only add, but deactivating, removing a role
     // or deleting can open access as well as close it, so those are destructive.
     list_acls: READ,
