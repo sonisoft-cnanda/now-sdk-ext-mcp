@@ -90,10 +90,10 @@ describe('create_browser_session', () => {
     // Milliseconds are read as milliseconds; a nonsense expiry is left out rather than failing after the write.
     createBrowserSession.mockResolvedValueOnce({ ...minted(), oauthExpiresAt: Date.UTC(2026, 10, 7) })
     expect((await call('create_browser_session', { instance: 'dev', name: 'ms' })).text).toContain('expires 2026-11-07T00:00:00.000Z')
-    createBrowserSession.mockResolvedValueOnce({ ...minted(), oauthExpiresAt: Number.MAX_VALUE })
     createBrowserSession.mockResolvedValueOnce({ ...minted(), storageState: { cookies: [{ ...minted().storageState.cookies[0], value: 'x'.repeat(1_100_000) }], origins: [] } })
     expect((await call('create_browser_session', { instance: 'dev', name: 'huge' })).text).toContain('session_write_failed')
     expect(existsSync(join(root, 'huge.json'))).toBe(false)
+    createBrowserSession.mockResolvedValueOnce({ ...minted(), oauthExpiresAt: Number.MAX_VALUE })
     const odd = await call('create_browser_session', { instance: 'dev', name: 'odd' })
     expect(odd.isError).toBe(false)
     expect(odd.text).not.toContain('expires')
