@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { UpdateSetManager } from "@sonisoft/now-sdk-ext-core";
+import { UpdateSetManager, WorkingSetManager } from "@sonisoft/now-sdk-ext-core";
+import { setLine, workingSetErrorText, workingSetLine } from "./working-set.js";
 import { withConnectionRetry } from "../common/connection.js";
 import { progressReporter } from "../common/progress.js";
 import { annotationsFor } from "../common/annotations.js";
@@ -196,7 +197,8 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
       annotations: annotationsFor("create_update_set"),
       title: "Create Update Set",
       description:
-        "Create a new update set. IMPORTANT: This creates a new update set on the instance.",
+        "Create a new update set, In progress, in the given application. It is not made current: use " +
+        "set_current_update_set for that. IMPORTANT: This creates a new update set on the instance.",
       inputSchema: {
         instance: z
           .string()
@@ -210,32 +212,44 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           ),
         name: z
           .string()
-          .describe("The name of the update set to create."),
+          .trim()
+          .min(1)
+          .max(80)
+          .regex(/^[^\p{Cc}]*$/u, "no control characters")
+          .describe("The name of the update set to create (at most 80 characters)."),
         description: z
           .string()
+          .regex(/^[^\p{Cc}]*$/u, "no control characters")
           .optional()
-          .describe("Optional description for the update set."),
+          .describe("Optional single-line description for the update set."),
         application: z
           .string()
-          .optional()
+          .regex(/^(global|[0-9a-f]{32}|[a-z0-9_]{1,40})$/, "global, a lowercase sys_scope sys_id, or a scope name such as x_acme_app")
           .describe(
-            "Optional application scope sys_id to associate with the update set."
+            "Required. The application the set belongs to: global, a sys_scope sys_id, or a scope name that matches exactly one " +
+              "active application (not a display name). Create the set in the application you are changing; the set is checked " +
+              "for a duplicate name there and read back."
           ),
       },
     },
     async ({ instance, name, description, application }) => {
       try {
+        // Not replayed: a create that landed before its response was lost would come back as a duplicate.
         const result = await withConnectionRetry(instance, async (snInstance) => {
           const manager = new UpdateSetManager(snInstance);
           return await manager.createUpdateSet({ name, description, application });
-        });
+        }, { retry: false });
 
         const lines = [
           `Update set created successfully.`,
           ``,
           `sys_id: ${result.sys_id}`,
-          `Name: ${result.name}`,
-          `State: ${result.state}`,
+          `Name: ${String(result.name ?? "").replace(/\p{Cc}/gu, " ")}`,
+          `State: ${String(result.state ?? "").replace(/\p{Cc}/gu, " ")}`,
+          `Application: ${String(result.application ?? application).replace(/\p{Cc}/gu, " ")}` +
+            (result.application && result.application !== application ? ` (${application})` : ""),
+          ``,
+          "Make it the working set with set_current_update_set before changing anything.",
         ];
 
         return {
@@ -247,17 +261,7 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           ],
         };
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error creating update set: ${message}`,
-            },
-          ],
-          isError: true,
-        };
+        return workingSetErrorText("create_update_set", error);
       }
     }
   );
@@ -276,7 +280,10 @@ export function registerSetCurrentUpdateSetTool(server: McpServer): void {
       annotations: annotationsFor("set_current_update_set"),
       title: "Set Current Update Set",
       description:
-        "Set the active update set for the session. All changes will be captured in this update set.",
+        "Make an In progress, non-Default update set the user's working set: the application (apps.current_app) and the " +
+        "update set, saved for every later session, as nex update-set use does. The result is read back, and it reports the " +
+        "previous working set: put it back with restore_update_set when the work is done. This changes what captures the " +
+        "user's own later changes, in the UI and elsewhere.",
       inputSchema: {
         instance: z
           .string()
@@ -288,41 +295,42 @@ export function registerSetCurrentUpdateSetTool(server: McpServer): void {
             "this by name when saying things like \"on my myinstance instance\". " +
             "If not provided, falls back to the SN_AUTH_ALIAS environment variable."
           ),
-        name: z
-          .string()
-          .describe("The name of the update set to set as current."),
         sys_id: z
           .string()
-          .describe("The sys_id of the update set to set as current."),
+          .regex(/^[0-9a-f]{32}$/, "a 32-character sys_id")
+          .describe("The sys_id of the In progress, non-Default update set to make current."),
+        name: z
+          .string()
+          .optional()
+          .describe("Deprecated and ignored: the set is identified by sys_id, and its name is read back."),
       },
     },
-    async ({ instance, name, sys_id }) => {
+    async ({ instance, sys_id }) => {
       try {
-        await withConnectionRetry(instance, async (snInstance) => {
-          const manager = new UpdateSetManager(snInstance);
-          return await manager.setCurrentUpdateSet({ name, sysId: sys_id });
-        });
-
+        const result = await withConnectionRetry(
+          instance,
+          (snInstance) => new WorkingSetManager(snInstance).useUpdateSet(sys_id),
+          { retry: false }
+        );
         return {
           content: [
             {
               type: "text" as const,
-              text: `Current update set changed to "${name}" (${sys_id}). All subsequent changes will be captured in this update set.`,
+              text: [
+                `Working set changed (read back): ${setLine(result.updateSet)}`,
+                ...(result.previous.updateSet === sys_id && result.previous.application === result.current.application
+                  ? ["It was already the working set, so there is nothing to restore from this call. If an earlier call " +
+                      "reported a previous working set, restore that one when the work is done."]
+                  : [
+                      `Previous working set: ${workingSetLine(result.previous)}`,
+                      "Restore it with restore_update_set (application, update_set) when the work is done.",
+                    ]),
+              ].join("\n"),
             },
           ],
         };
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error setting current update set: ${message}`,
-            },
-          ],
-          isError: true,
-        };
+        return workingSetErrorText("set_current_update_set", error);
       }
     }
   );
@@ -423,9 +431,12 @@ export function registerCloneUpdateSetTool(server: McpServer): void {
       annotations: annotationsFor("clone_update_set"),
       title: "Clone Update Set",
       description:
-        "Clone an existing update set by creating a new one and copying all its records. " +
-        "The new update set gets the specified name and starts in 'in progress' state.\n\n" +
-        "IMPORTANT: This creates a new update set and copies all records on the instance.",
+        "Clone an existing update set by creating a new one and copying its records.\n\n" +
+        "WARNING: do not use this to move or promote work. The copy keeps only a few columns of each capture " +
+        "(name, type, target_name, payload, category): it drops application (the copies default to global), action, " +
+        "table, replace_on_upgrade, update_guid and sys_recorded_at, so the clone does not commit like the original. " +
+        "To move a capture use move_update_set_capture; to ship a set, complete it and export_update_set. " +
+        "Use this only when the user asks for a clone knowing that.",
       inputSchema: {
         instance: z
           .string()
@@ -491,9 +502,10 @@ export function registerMoveUpdateSetRecordsTool(server: McpServer): void {
       annotations: annotationsFor("move_update_set_records"),
       title: "Move Update Set Records",
       description:
-        "Move records from one update set to another. You can move specific records " +
-        "by sys_id, or move all records from a source update set.\n\n" +
-        "IMPORTANT: This modifies update set membership of records on the instance.",
+        "Move records from one update set to another, by sys_id or all records of a source set.\n\n" +
+        "WARNING: this is unverified: any HTTP 200 counts as moved, nothing is read back, and it does not check the " +
+        "same-application rule, newer captures elsewhere, or duplicates in the target. Prefer move_update_set_capture, " +
+        "which checks all of those and reads the move back; if you use this, query sys_update_xml afterwards.",
       inputSchema: {
         instance: z
           .string()

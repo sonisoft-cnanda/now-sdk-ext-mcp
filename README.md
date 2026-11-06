@@ -278,6 +278,7 @@ See **[TOOLS.md](TOOLS.md)** for the full list of available tools with parameter
 | `MCP_TOOL_PACKAGE` | `full` | Tool package or comma-separated union; see [tool packages](TOOLS.md#tool-packages). |
 | `SN_CRED_STORE_ENABLE` | _(unset)_ | Set to `1` to use the imported headless credential store; see [credential storage](CLAUDE.md#credential-storage). |
 | `NEX_LOG_LEVEL` | `info` | Diagnostic log level; logs go to stderr. See [debugging](#debugging) for file logging. |
+| `NEX_EXPORT_DIR` | _(unset)_ | When set, `export_update_set` writes only inside this directory and may replace files there; it must not be writable by other local users. Unset, an export can only create a new file. Exports always need an absolute `.xml` path. |
 
 ## Development
 

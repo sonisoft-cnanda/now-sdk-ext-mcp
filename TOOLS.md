@@ -1356,7 +1356,7 @@ Create a new update set on the ServiceNow instance.
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
 | `name` | string | **Yes** | — | Name of the update set to create. |
 | `description` | string | No | — | Optional description for the update set. |
-| `application` | string | No | — | Optional application scope sys_id to associate the update set with. |
+| `application` | string | **Yes** | — | `global`, a sys_scope sys_id, or a scope name matching exactly one active application. The set is checked for a duplicate name there and read back. Required since 5.0: before, it was optional and an omitted application took an unchecked path into the user's current application. |
 
 ### Example Usage
 
@@ -1366,6 +1366,7 @@ Create a new update set on the ServiceNow instance.
   "arguments": {
     "instance": "myinstance",
     "name": "FEAT-1234 New Catalog Item",
+    "application": "global",
     "description": "Update set for the new hardware catalog item"
   }
 }
@@ -1375,45 +1376,113 @@ Create a new update set on the ServiceNow instance.
 
 ```
 Update set created successfully.
-sys_id: new123def456789
+
+sys_id: 3cc9f203531c9f90b6d61901a0490ed4
 Name: FEAT-1234 New Catalog Item
 State: in progress
+Application: global
+
+Make it the working set with set_current_update_set before changing anything.
 ```
 
 ---
 
 ## set_current_update_set
 
-Set the active update set for the session. All subsequent changes will be captured in this update set.
+Make an In progress, non-Default update set the user's **working set**, as `nex update-set use` does. It saves the application (`apps.current_app`) and the update set for every later session, then reads both back. The result reports the previous working set: put it back with `restore_update_set` when the work is done.
 
-> **Warning:** This changes which update set captures configuration changes made on the instance.
+> **Warning:** This changes what captures the user's own later changes, in the UI and elsewhere. Needs `execute` as well as `write`: the preferences are saved by a background script.
 
 ### Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
-| `name` | string | **Yes** | — | Name of the update set to set as current. |
-| `sys_id` | string | **Yes** | — | sys_id of the update set to set as current. |
-
-### Example Usage
-
-```json
-{
-  "name": "set_current_update_set",
-  "arguments": {
-    "instance": "myinstance",
-    "name": "FEAT-1234 New Catalog Item",
-    "sys_id": "new123def456789"
-  }
-}
-```
+| `sys_id` | string | **Yes** | — | sys_id of the In progress, non-Default update set. |
+| `name` | string | No | — | Deprecated and ignored; the name is read back. |
 
 ### Example Output
 
 ```
-Current update set changed to "FEAT-1234 New Catalog Item" (new123def456789).
-All subsequent changes will be captured in this update set.
+Working set changed (read back): FEAT-1234 New Catalog Item (3cc9f203531c9f90b6d61901a0490ed4); state: in progress; application: 921fd9af4c554457a73ad246c71a17f7
+Previous working set: application global, update set 9055f6338c9503100a22deb6dd2b4ead
+Restore it with restore_update_set (application, update_set) when the work is done.
+```
+
+---
+
+## restore_update_set
+
+Put back the working set that `set_current_update_set` reported as previous. If that set has closed meanwhile, the application's Default set becomes current instead, and the result says so.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `application` | string | **Yes** | — | `previous.application`: `global`, a sys_scope sys_id, or `""` when none was saved. |
+| `update_set` | string | **Yes** | — | `previous.updateSet`: a sys_id, or `""` when none was saved. |
+
+When `set_current_update_set` reported "none saved", restore with `{"application": "", "update_set": ""}`: the user goes back to the platform default (Global and its Default set).
+
+---
+
+## complete_update_set
+
+Complete an In progress, non-Default update set after checking what it holds: the capture count must equal `expected_captures`, no other user may be working in it, and every capture must belong to the set's application. The state is read back.
+
+> **Warning:** A Complete set should not be reopened once another instance retrieved it or it was exported. Complete when the work is done and reviewed.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `sys_id` | string | **Yes** | — | The set to complete. |
+| `expected_captures` | integer | **Yes** | — | The number of captures you reviewed (e.g. with `inspect_update_set`). |
+
+---
+
+## move_update_set_capture
+
+Move one capture (`sys_update_xml`) to another In progress, non-Default set of its own application, and read it back. Refused when a newer capture of the same record exists elsewhere, when the target already holds one, or across applications. Prefer this to `move_update_set_records`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `capture` | string | **Yes** | — | The `sys_update_xml` sys_id. |
+| `source_set` | string | **Yes** | — | The set it is in now. |
+| `target_set` | string | **Yes** | — | The set to move it to. |
+| `reason` | string | **Yes** | — | Why it moves; letters, digits and simple punctuation. Appended to the capture's comments. |
+
+---
+
+## export_update_set
+
+Export an update set to an XML file on the machine running the server, as the platform's Export to XML does. That covers a Complete local set, a batch base with its Complete children, or a Retrieved (Loaded) set. The file is checked against the set's records before it is written. A local export's temporary Retrieved Update Set copy is removed, and its removal is read back.
+
+> **Warning:** The XML holds every record's full payload. It is written to the file only (mode 0600) and never returned to the model. Export from a customer instance only with the user's say-so. Needs `execute` and `write`, because the platform's export copies the set through a background script.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
+| `sys_id` | string | **Yes** | — | A `sys_update_set` or `sys_remote_update_set` sys_id. |
+| `output` | string | **Yes** | — | Absolute path ending in `.xml`, inside `NEX_EXPORT_DIR` when the server sets it. |
+| `replace` | boolean | No | `false` | Replace an existing regular file, or a link (the link itself, never its target). Only when `NEX_EXPORT_DIR` is set: without it, an export can only create a new file. |
+| `include_incomplete` | boolean | No | `false` | Export a set that is not Complete, as a snapshot. |
+
+### Example Output
+
+```
+Exported an update set (local) to /work/exports/feat-1234.xml (48211 bytes).
+Update set: FEAT-1234 New Catalog Item (3cc9...); state: complete
+Records: 12
+- FEAT-1234 New Catalog Item (3cc9...); complete; 12 record(s)
+Temporary copy 8f2a... removed by platform (read back).
 ```
 
 ---
@@ -3096,6 +3165,8 @@ Find records matching an encoded query and delete them in bulk. Supports dry-run
 
 Clone an existing update set by creating a new one and copying all its records.
 
+> **Warning:** Do not use this to move or promote work. The copy keeps only `name`, `type`, `target_name`, `payload` and `category` of each capture. It drops `application` (so the copies default to global), `action`, `table`, `replace_on_upgrade`, `update_guid` and `sys_recorded_at`. Use `move_update_set_capture`, or `complete_update_set` and then `export_update_set`.
+
 > **Warning:** This creates a new update set and copies records on the instance.
 
 ### Parameters
@@ -3133,6 +3204,8 @@ Records cloned: 15/15
 ## move_update_set_records
 
 Move records from one update set to another.
+
+> **Warning:** Unverified. Any HTTP 200 counts as moved and nothing is read back. The same-application rule, newer captures and duplicates are not checked. Prefer `move_update_set_capture`.
 
 > **Warning:** This modifies update set membership of records on the instance.
 

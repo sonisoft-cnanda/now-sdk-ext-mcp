@@ -133,10 +133,12 @@ Append custom workflow guides specific to your project:
 ## Project Workflows
 
 ### Deploy Feature Branch
-1. Use `create_update_set` with name "FEAT-XXXX Description"
-2. Make changes...
-3. Use `inspect_update_set` to review
-4. Use `clone_update_set` to create backup
+1. Use `create_update_set` with name "FEAT-XXXX Description" and the application
+2. Make it the working set with `set_current_update_set`; keep the previous one it reports
+3. Make changes...
+4. Use `inspect_update_set` to review, then `complete_update_set` with that count
+5. Put the previous working set back with `restore_update_set`
+6. Use `export_update_set` to keep an XML copy
 ```
 
 ### Keeping Updated
