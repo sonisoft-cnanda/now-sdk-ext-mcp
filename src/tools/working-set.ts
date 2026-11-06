@@ -293,27 +293,32 @@ export function registerMoveUpdateSetCaptureTool(server: McpServer): void {
  */
 async function checkOutput(output: string, replace: boolean): Promise<string> {
   if (!isAbsolute(output) || /[/\\]$/.test(output) || extname(output).toLowerCase() !== ".xml") throw new OutputError("output_invalid");
-  // The directory is resolved once (links included) and the write goes through that resolved path, so a link swapped in
-  // afterwards cannot move the file out of NEX_EXPORT_DIR.
-  const directory = await realpath(dirname(resolve(output))).catch(() => undefined);
-  if (!directory || !(await stat(directory).then((s) => s.isDirectory(), () => false))) throw new OutputError("output_invalid");
-  const path = join(directory, basename(output));
   const root = process.env.NEX_EXPORT_DIR;
-  // Set but empty (an unexpanded template variable, say) fails closed like any other misconfiguration.
+  // Set but empty (an unexpanded template variable, say) fails closed like any other misconfiguration. Checked first,
+  // so a misconfigured server says so whatever path was asked for.
+  let realRoot: string | undefined;
   if (root !== undefined) {
     // A relative root would resolve against the working directory the client chose; a missing one refuses every path.
-    const realRoot = isAbsolute(root) ? await realpath(root).catch(() => undefined) : undefined;
+    realRoot = isAbsolute(root) ? await realpath(root).catch(() => undefined) : undefined;
     if (!realRoot || !(await stat(realRoot).then((s) => s.isDirectory(), () => false))) {
       log.warn("NEX_EXPORT_DIR is not an absolute, existing directory; refusing every export");
       throw new OutputError("export_dir_misconfigured");
     }
-    const within = relative(realRoot, directory);
-    if (within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) throw new OutputError("output_invalid");
   } else if (replace) {
     // Without a confined directory, an export may only create a file: replacing one could overwrite any .xml the
     // server user owns (a build's settings.xml, say) with instance-authored content.
     throw new OutputError("replace_needs_export_dir");
   }
+  // The directory is resolved (links included) and the write goes through that resolved path. That narrows, but
+  // cannot close, the window in which a directory on the path could be swapped for a link (Node has no openat walk);
+  // enough against a model choosing paths, not against a local process racing the filesystem.
+  const directory = await realpath(dirname(resolve(output))).catch(() => undefined);
+  if (!directory || !(await stat(directory).then((s) => s.isDirectory(), () => false))) throw new OutputError("output_invalid");
+  if (realRoot) {
+    const within = relative(realRoot, directory);
+    if (within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)) throw new OutputError("output_invalid");
+  }
+  const path = join(directory, basename(output));
   if (!(await access(directory, constants.W_OK).then(() => true, () => false))) throw new OutputError("output_invalid");
   const existing = await lstat(path).catch(() => undefined);
   if (existing && !replace) throw new OutputError("output_exists");

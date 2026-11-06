@@ -260,7 +260,7 @@ describe('export_update_set', () => {
     for (const root of [relative(process.cwd(), dir), join(dir, 'missing'), '']) {
       process.env.NEX_EXPORT_DIR = root
       try {
-        const { text } = await call('export_update_set', { sys_id: SET, output: join(dir, 'a.xml') })
+        const { text } = await call('export_update_set', { sys_id: SET, output: join(dir, 'missing-dir', 'a.xml') })
         expect(text).toContain('export_dir_misconfigured')
         expect(text).toContain('do not try other paths')
       } finally { delete process.env.NEX_EXPORT_DIR }
