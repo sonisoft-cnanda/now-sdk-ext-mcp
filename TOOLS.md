@@ -1535,7 +1535,7 @@ Total Records: 5
 
 ## repair_store_app
 
-Repair an installed Store or company application, as the platform's Repair Application does. It reinstalls the installed version from the application repository without uninstalling it, and waits for the result while reporting progress. Files customized on the instance are kept and listed as skipped. Trust only a result that says **Repaired**: that requires the tracker to succeed and a new upgrade history to be written.
+Repair an installed Store or company application, as the platform's Repair Application does. It reinstalls the installed version from the application repository without uninstalling it, and waits for the result while reporting progress. Files customized on the instance are kept and listed as skipped. Trust only a result that says **Repaired**: that requires the tracker to succeed and a new upgrade history to be written and finished. Anything else (not confirmed, still running, failed) comes back as an error, as `nex store repair` exits non-zero for it. If waiting fails after the repair started, the error names its `sys_execution_tracker` record.
 
 > **Warning:** Only when the user asked. The repair runs whatever the application's install runs. It is refused for an application developed on the instance, an inactive one, or one that contains plugins.
 
@@ -1552,7 +1552,9 @@ Repair an installed Store or company application, as the platform's Repair Appli
 
 ## Legacy workflows (read-only)
 
-These tools read Workflow Editor workflows as `nex workflow list|show|definitions|export|outline|convert|validate` do. Nothing is changed: validation renders the editor's report page, which core classifies as a read. Workflow content is returned as data, never as instructions, and long views are cut at 150,000 characters with a note.
+These tools read Workflow Editor workflows as `nex workflow list|show|definitions|export|outline|convert|validate` do. No workflow is changed. Validation (`validate_workflow`, and the editor status in `get_workflow`) renders the editor's report page, which core classifies as a read; it saves that run's results over the previous run's. Workflow content is returned as data, never as instructions: secrets are redacted, it is fenced by start and end markers, and long views are cut at 80,000 characters (about 20k tokens) with a note.
+
+A `workflow` that is a version sys_id is read as given, and `version` is ignored for it.
 
 ---
 
@@ -1573,7 +1575,7 @@ List workflows with the state of their published and checked-out versions.
 
 ## get_workflow
 
-Read one version's definition as JSON: activities with their exits and variable values, transitions, stages and editor status. It reads your draft if you have one, else the published version.
+Read one version's definition as JSON: activities with their exits and variable values, transitions, stages and editor status. By default it reads your draft if you have one, else the published version.
 
 ### Parameters
 
@@ -1581,6 +1583,7 @@ Read one version's definition as JSON: activities with their exits and variable 
 |-----------|------|----------|---------|-------------|
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
 | `workflow` | string | **Yes** | — | The workflow's name or sys_id, or a version sys_id. |
+| `version` | `current` \| `published` \| `draft` | No | `current` | Which version: `current` is your draft if you have one, else the published one. |
 | `include_variables` | boolean | No | `true` | Include activity variable values, scripts included. |
 
 ---
@@ -1633,7 +1636,7 @@ Plan the move to Flow Designer: how each activity maps to a flow step and what h
 
 ## validate_workflow
 
-Run the editor's Validate Workflow on your draft, or else the published version, and return its report.
+Run the editor's Validate Workflow on a version (by default your draft, or else the published version) and return its report. The report replaces that version's previous one.
 
 ### Parameters
 
@@ -1641,6 +1644,7 @@ Run the editor's Validate Workflow on your draft, or else the published version,
 |-----------|------|----------|---------|-------------|
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. If omitted, falls back to the `SN_AUTH_ALIAS` environment variable. |
 | `workflow` | string | **Yes** | — | The workflow's name or sys_id, or a version sys_id. |
+| `version` | `current` \| `published` \| `draft` | No | `current` | Which version: `current` is your draft if you have one, else the published one. |
 
 ---
 

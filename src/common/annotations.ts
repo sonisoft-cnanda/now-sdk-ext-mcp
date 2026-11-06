@@ -228,8 +228,9 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     close_incident: SET,
     approve_change: SET,
 
-    // ---- legacy workflows: reads. validate_workflow renders the editor's report page, which core
-    // classifies as a read.
+    // ---- legacy workflows: reads. validate_workflow (and get_workflow's editor status) renders the
+    // editor's report page, which core classifies as a read. Rendering it saves that run's results over
+    // the previous run's; no workflow configuration changes, so READ (idempotent) holds.
     list_workflows: READ,
     get_workflow: READ,
     outline_workflow: READ,
