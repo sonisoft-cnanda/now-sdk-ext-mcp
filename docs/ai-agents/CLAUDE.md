@@ -68,6 +68,8 @@ All tools at a glance:
 | `get_flow_outputs` | Outputs from a completed flow execution |
 | `get_flow_error` | Error message from a failed flow execution |
 | `cancel_flow` | Cancel a running or paused flow execution |
+| `get_flow_definition` | Design-time definition of a flow, subflow or action (summary or full) |
+| `send_flow_message` | Resume a flow waiting for a message; then check its status |
 | **Task Management** | |
 | `find_task` | Find a task by its number (INC, CHG, PRB, etc.) |
 | `add_task_comment` | Add a comment or work note to any task record |
@@ -104,6 +106,10 @@ All tools at a glance:
 | `list_workflow_activity_types` | Activity types and how this instance defines one |
 | **Store Repair** | |
 | `repair_store_app` | Reinstall an installed app's version from the repository; trust only "Repaired" |
+| **Operations** | |
+| `list_transactions` | Active transactions on every cluster node |
+| `kill_transaction` | Cancel one active transaction (confirm by repeating its sys_id) |
+| `get_policy_status` | Whether write and execute are permitted, and why; always available |
 | **Application Metadata** | |
 | `insert_metadata_record` / `update_metadata_record` / `delete_metadata_record` | Write metadata through its form in a named application and set; verified |
 | `add_table_column` / `remove_table_column` | Add or remove a column (working set required to add) |

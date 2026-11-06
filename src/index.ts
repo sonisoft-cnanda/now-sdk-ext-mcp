@@ -22,6 +22,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerServiceNowResources } from "./resources/servicenow.js";
 import { TOOL_REGISTRY } from "./tools/registry.js";
 import { registerListToolPackagesTool } from "./tools/tool-packages.js";
+import { registerGetPolicyStatusTool } from "./tools/policy-status.js";
 import { resolveToolPackage, reportResolution } from "./common/tool-packages.js";
 import { readServerVersion } from "./common/version.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -71,6 +72,8 @@ for (const name of activePackage.tools) {
 // way to tell "this server cannot do that" from "that tool is filtered out of
 // this session".
 registerListToolPackagesTool(guarded, activePackage);
+// Likewise: a refused tool call is diagnosed here, whatever the package.
+registerGetPolicyStatusTool(guarded);
 
 
 // Prevent the process from crashing silently on unexpected errors.

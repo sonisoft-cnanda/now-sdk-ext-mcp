@@ -39,13 +39,14 @@ describe('tool annotation coverage', () => {
     expect(Object.keys(TOOL_ANNOTATIONS).filter((n) => !registered.has(n))).toEqual([])
   })
 
-  it('annotates one more tool than the registry holds', () => {
-    // list_tool_packages is registered unconditionally rather than through
-    // TOOL_REGISTRY, because a filtered session still needs to be able to ask
-    // what it is missing. So annotations cover the registry plus exactly that one.
+  it('annotates the registry plus the two always-registered tools', () => {
+    // list_tool_packages and get_policy_status are registered unconditionally rather
+    // than through TOOL_REGISTRY, because a filtered session still needs to be able to
+    // ask what it is missing and why it was refused. So annotations cover the registry
+    // plus exactly those two.
     const registryNames = new Set(allToolNames())
     const extra = Object.keys(TOOL_ANNOTATIONS).filter((n) => !registryNames.has(n))
-    expect(extra).toEqual(['list_tool_packages'])
+    expect(extra.sort()).toEqual(['get_policy_status', 'list_tool_packages'])
   })
 
   it('gives every tool an explicit readOnlyHint', () => {

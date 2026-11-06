@@ -95,6 +95,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // Registered outside TOOL_REGISTRY because it is always available regardless
     // of the active package.
     list_tool_packages: READ,
+    // Reports this process's permission policy; also registered outside TOOL_REGISTRY.
+    get_policy_status: READ,
 
     // ---- aggregate: server-side counts, no writes
     count_records: READ,
@@ -168,6 +170,16 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // Terminates a running execution; whatever it had not yet done is lost.
     cancel_flow: OVERWRITE,
     copy_flow: CREATE,
+    // Design-time definition through the processflow API: nothing runs.
+    get_flow_definition: READ,
+    // Resumes a paused execution, which then runs whatever the flow author wrote next; sent from a
+    // background script, so it needs execute as well as write.
+    send_flow_message: ARBITRARY,
+
+    // ---- cluster transactions. Listing asks the nodes to report (POSTs core declares read-only).
+    list_transactions: READ,
+    // Ends a running transaction part way; what it had not done is lost. Repeating settles.
+    kill_transaction: OVERWRITE,
 
     // ---- health
     check_instance_health: READ,

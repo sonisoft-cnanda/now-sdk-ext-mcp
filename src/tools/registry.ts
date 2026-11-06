@@ -42,6 +42,8 @@ import {
   registerValidateWorkflowTool,
 } from "../tools/workflow-read.js";
 import { registerRepairStoreAppTool } from "../tools/store-repair.js";
+import { registerGetFlowDefinitionTool, registerSendFlowMessageTool } from "../tools/flow-design.js";
+import { registerKillTransactionTool, registerListTransactionsTool } from "../tools/transactions.js";
 import {
   registerAddAclRoleTool,
   registerCreateAclTool,
@@ -227,6 +229,12 @@ export const TOOL_REGISTRY: Record<string, ToolRegistrar> = {
   validate_workflow: registerValidateWorkflowTool,
   // ---- store application repair
   repair_store_app: registerRepairStoreAppTool,
+  // ---- flow design and messages
+  get_flow_definition: registerGetFlowDefinitionTool,
+  send_flow_message: registerSendFlowMessageTool,
+  // ---- cluster transactions
+  kill_transaction: registerKillTransactionTool,
+  list_transactions: registerListTransactionsTool,
   // ---- access controls and role elevation
   add_acl_role: registerAddAclRoleTool,
   create_acl: registerCreateAclTool,
