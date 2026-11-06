@@ -226,7 +226,7 @@ export function registerCreateUpdateSetTool(server: McpServer): void {
           .string()
           .regex(/^(global|[0-9a-f]{32}|[a-z0-9_]{1,40})$/, "global, a lowercase sys_scope sys_id, or a scope name such as x_acme_app")
           .describe(
-            "The application the set belongs to: global, a sys_scope sys_id, or a scope name that matches exactly one " +
+            "Required. The application the set belongs to: global, a sys_scope sys_id, or a scope name that matches exactly one " +
               "active application (not a display name). Create the set in the application you are changing; the set is checked " +
               "for a duplicate name there and read back."
           ),

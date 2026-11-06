@@ -121,12 +121,12 @@ class OutputError extends Error {
 }
 
 const OUTPUT_REMEDIATION: Record<string, string> = {
-  output_exists: "The output file exists. Choose another path, or replace it only if the user asked to (inside NEX_EXPORT_DIR).",
+  output_exists: "The output file exists. Choose another path, or ask the user whether to overwrite it.",
   output_invalid:
     "The path must be absolute and end in .xml, inside NEX_EXPORT_DIR when that is set, in an existing writable directory, " +
     "and (to replace) name a regular file. Choose another path.",
   replace_needs_export_dir:
-    "Replacing a file is allowed only inside NEX_EXPORT_DIR, which this server does not set. Write a new file instead.",
+    "Overwriting an existing file is not permitted on this server (NEX_EXPORT_DIR is not set). Write a new file instead.",
   export_dir_misconfigured:
     "The server's NEX_EXPORT_DIR is not an absolute, existing directory, so no export path will be accepted until the " +
     "server configuration is fixed. Tell the user; do not try other paths.",
@@ -140,7 +140,8 @@ function detailLine(detail: object | undefined): string[] {
   if (!detail) return [];
   const parts = Object.entries(detail)
     .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => `${k}: ${clean(typeof v === "object" ? JSON.stringify(v) : String(v))}`);
+    // Core promises identifiers and counts only; the cap keeps that promise from being the only guard.
+    .map(([k, v]) => `${k}: ${clean(typeof v === "object" ? JSON.stringify(v) : String(v)).slice(0, 300)}`);
   return parts.length ? [`Detail: ${parts.join("; ")}`] : [];
 }
 

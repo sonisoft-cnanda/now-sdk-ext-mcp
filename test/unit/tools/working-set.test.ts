@@ -232,6 +232,7 @@ describe('export_update_set', () => {
     const output = join(dir, 'settings.xml'); writeFileSync(output, '<settings/>')
     const { text } = await call('export_update_set', { sys_id: SET, output, replace: true })
     expect(text).toContain('replace_needs_export_dir')
+    expect(text).not.toMatch(/\breplace\b/)
     expect(readFileSync(output, 'utf8')).toBe('<settings/>')
     expect(exportUpdateSet).not.toHaveBeenCalled()
   })
