@@ -258,13 +258,17 @@ describe('layouts', () => {
     let r = await call('set_list_layout', { table: 'incident', columns: ['number'], scope: 'global', update_set: SET })
     expect(r.text).toContain('The view or the update set may not exist')
     listLayout.getListLayout.mockRejectedValue(new MetadataScopeError('invalid_input'))
-    expect((await call('get_list_layout', { table: 'incident', view: 'nosuch' })).text).toContain('The view or the update set may not exist')
+    const read = (await call('get_list_layout', { table: 'incident', view: 'nosuch' })).text
+    expect(read).toContain('The view may not exist')
+    expect(read).not.toContain('update set')
     choices.setChoice.mockRejectedValue(new MetadataScopeError('invalid_input'))
     expect((await call('set_choice', { table: 'incident', column: 'u_level', value: '1', scope: 'global', update_set: SET })).text)
       .toContain('A value was refused, or the update set may not exist')
     // Refused by the schema: core is never called for these.
     expect(choices.setChoice).toHaveBeenCalledTimes(1)
-    expect((await call('set_choice', { table: 'incident', column: 'u_level', value: '1', language: 'pt-br', scope: 'global', update_set: SET })).isError).toBe(true)
+    for (const language of ['pt-br', 'EN']) {
+      expect((await call('set_choice', { table: 'incident', column: 'u_level', value: '1', language, scope: 'global', update_set: SET })).isError).toBe(true)
+    }
     expect(choices.setChoice).toHaveBeenCalledTimes(1)
     const removals = columns.removeColumn.mock.calls.length
     expect((await call('remove_table_column', { table: 't', column: '1x', confirm: 't.1x', scope: 'global', update_set: SET })).isError).toBe(true)
@@ -275,6 +279,16 @@ describe('layouts', () => {
     columns.removeColumn.mockRejectedValue(new MetadataScopeError('delete_not_supported'))
     r = await call('remove_table_column', { table: 't', column: 'u_x', confirm: 't.u_x', scope: 'global', update_set: SET })
     expect(r.text).toContain('Delete Column action')
+  })
+
+  it('says a failed choice or form read is only a read failure', async () => {
+    choices.getChoices.mockRejectedValue(new Error('socket hang up'))
+    formLayout.getFormLayout.mockRejectedValue(new Error('socket hang up'))
+    for (const [name, args] of [['get_choice_list', { table: 'incident', column: 'u_level' }], ['get_form_layout', { section: SECTION }]] as const) {
+      const r = await call(name, args)
+      expect(r.isError).toBe(true)
+      expect(r.text).not.toContain('may have been applied')
+    }
   })
 
   it('says a read failure is only a read failure', async () => {

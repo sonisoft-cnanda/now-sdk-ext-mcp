@@ -27,3 +27,10 @@ describe('core exports used by the metadata tools', () => {
     expect(typeof (core as any).redactMessage).toBe('function')
   })
 })
+
+describe('the real redactor after markup is stripped', () => {
+  it('redacts a secret that markup had split', () => {
+    const stripped = 'password<b>: </b>hunter2'.replace(/<[^>]*>/g, '').replace(/[<>]/g, '')
+    expect((core as any).redactMessage(stripped)).not.toContain('hunter2')
+  })
+})

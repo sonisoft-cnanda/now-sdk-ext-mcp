@@ -218,6 +218,8 @@ export function metadataErrorText(action: string, error: unknown, context: Error
     const detail = (error.detail ?? {}) as Record<string, unknown>;
     if (error.code === "invalid_input" && (detail.updateSetState !== undefined || detail.updateSetApplication !== undefined)) {
       lines.push(UPDATE_SET_REFUSED);
+    } else if (error.code === "invalid_input" && !error.detail && context.listLayout && context.read) {
+      lines.push("The view may not exist: check it on sys_ui_view.");
     } else if (error.code === "invalid_input" && !error.detail && context.listLayout) {
       lines.push("The view or the update set may not exist: check the view on sys_ui_view and the set with list_update_sets.");
     } else if (error.code === "invalid_input" && !error.detail && !context.read) {
@@ -545,6 +547,7 @@ const choiceParams = {
   instance: instanceParam,
   table: z.string().regex(IDENT).describe("The table."),
   column: z.string().regex(IDENT).describe("The column, prefix included (u_ in Global)."),
+  // Lowercase: core compares the stored language exactly, so EN would never match the stored en rows.
   language: z.string().regex(/^[a-z][a-z_]{1,9}$/).optional().describe("Choice language (sys_choice.language, e.g. en, pb); en when omitted."),
 };
 const choiceValue = z
