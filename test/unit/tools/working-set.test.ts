@@ -44,6 +44,8 @@ const summary = (sysId: string, state = 'in progress') => ({ sysId, name: `Set $
 let server: McpServer, client: Client, dir: string
 beforeEach(async () => {
   jest.clearAllMocks()
+  // Neither a developer's shell nor an earlier failed test may leave the export confined.
+  delete process.env.NEX_EXPORT_DIR
   mockWithConnectionRetry.mockImplementation(async (_a: any, op: any) => op({}))
   dir = mkdtempSync(join(tmpdir(), 'mcp-export-'))
   server = new McpServer({ name: 't', version: '1' })
@@ -54,7 +56,7 @@ beforeEach(async () => {
   client = new Client({ name: 'c', version: '1' })
   await client.connect(c)
 })
-afterEach(async () => { await client.close(); await server.close(); rmSync(dir, { recursive: true, force: true }) })
+afterEach(async () => { delete process.env.NEX_EXPORT_DIR; await client.close(); await server.close(); rmSync(dir, { recursive: true, force: true }) })
 
 const call = async (name: string, args: Record<string, unknown>) => {
   const r: any = await client.callTool({ name, arguments: args })

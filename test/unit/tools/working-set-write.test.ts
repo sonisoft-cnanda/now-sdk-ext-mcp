@@ -39,6 +39,7 @@ const result = { xml: '<unload>payload</unload>', source: 'local', kind: 'single
 let server: McpServer, client: Client, dir: string
 beforeEach(async () => {
   linkError = undefined; beforeCopy = undefined
+  delete process.env.NEX_EXPORT_DIR
   mockWithConnectionRetry.mockImplementation(async (_a: any, op: any) => op({}))
   exportUpdateSet.mockResolvedValue(result)
   dir = mkdtempSync(join(tmpdir(), 'mcp-export-'))
