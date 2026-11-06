@@ -4029,11 +4029,31 @@ Send a message to a paused execution waiting in a Wait For Message step, which r
 
 ---
 
+## Browser sessions (Playwright)
+
+A verified browser session for an alias, as `nex auth browser-session` mints it, for driving the UI with Playwright: core logs in with the alias's stored credential, proves the cookies authenticate without the OAuth token, and the server writes them as a Playwright storage state.
+
+> **Warning:** The session carries the user's full rights in the UI, outside this server's change policy. So `create_browser_session` needs `write` and `execute`, and `NEX_POLICY_DENY` of either refuses it. The cookies are never returned: only the file's path. Never print or commit the file, and delete it when the browser work is done.
+
+| Tool | Does |
+|------|------|
+| `create_browser_session` | Writes `<name>.json` (0600, never replacing a file) in the session directory and returns its path, the cookie count and the OAuth token's expiry. `name` is letters, digits, `-` and `_`; default the alias and a timestamp. The model never chooses a path. |
+| `delete_browser_session` | Deletes a session file, given the path `create_browser_session` returned: only a file in the session directory that is this user's own, 0600, and a Playwright storage state, so nothing else there can be removed. Local cleanup, so it is permitted under any policy. |
+
+The session directory is `NEX_BROWSER_SESSION_DIR` when the server sets it, otherwise a private per-user directory under the system temp directory. Either must be this user's own and closed to others (0700), or every call is refused. Files are created with O_EXCL (never replacing a file or following a link), with no temporary copy. On Windows there is no owner or mode to check, and the per-user temp directory is what keeps the file private.
+
+```js
+// Playwright, with the path create_browser_session returned
+const context = await browser.newContext({ storageState: "/tmp/nex-browser-sessions-1000/ui-check.json" });
+```
+
+---
+
 ## Flow debugger
 
 Workflow Studio's **Test > Debug**, as `nex flow debug` drives it. A debug run executes the flow's current draft **for real**: records it creates or changes are kept, so debug a copy (`copy_flow`) in a scratch app. A run is addressed by its root context id; nothing is held in the server, and `list_flow_debug_sessions` finds runs left open. Every run must be ended: run it to the end, or `debug_flow_cancel`.
 
-Starting and stepping need `execute` as well as `write`; breakpoints and cancel need only `write`, so a run can still be cancelled under `NEX_POLICY_DENY=execute`. Calls that move a run are never replayed after a transport error. A wait defaults to 45 seconds, under the 60-second request timeout many clients use; `debug_flow_run_to` waits more than once, so its `timeout_seconds` (default 30) is for the whole call and is split across its waits. A client that gives up first leaves the run open: find it with `list_flow_debug_sessions`. Run data (names, step labels, inputs and outputs) is fenced as data and redacted; values over 200 characters are cut unless `full`.
+Starting and stepping need `execute` as well as `write`; breakpoints and cancel need only `write`, so a run can still be cancelled under `NEX_POLICY_DENY=execute`. Calls that move a run are never replayed after a transport error. A wait defaults to 45 seconds, under the 60-second request timeout many clients use; `debug_flow_run_to` waits more than once, so its `timeout_seconds` (default 30, at least 10 so each wait is long enough to reach a breakpoint) is for the whole call and is split across its waits. A client that gives up first leaves the run open: find it with `list_flow_debug_sessions`. Run data (names, step labels, inputs and outputs) is fenced as data and redacted; values over 200 characters are cut unless `full`.
 
 | Tool | Does | Needs |
 |------|------|-------|

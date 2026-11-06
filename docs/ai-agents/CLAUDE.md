@@ -70,6 +70,7 @@ All tools at a glance:
 | `cancel_flow` | Cancel a running or paused flow execution |
 | `get_flow_definition` | Design-time definition of a flow, subflow or action (summary or full) |
 | `send_flow_message` | Resume a flow waiting for a message; then check its status |
+| `create_browser_session` / `delete_browser_session` | Playwright storage-state file for an alias (path only, never cookies); delete it after |
 | `debug_flow_start` / `debug_flow_run_to` | Debug a flow's draft for real (Test > Debug); run_to stops at a breakpoint and cancels |
 | `debug_flow_step` / `debug_flow_inspect` / `debug_flow_breakpoints` | Step a paused run, read its step data, change breakpoints |
 | `debug_flow_cancel` / `list_flow_debug_sessions` | End a run (works under deny-execute); find runs left open |

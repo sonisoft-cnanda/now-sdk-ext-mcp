@@ -134,7 +134,7 @@ function pausedStep(snapshot: FlowDebugSnapshot): FlowDebugStepData | undefined 
 
 /** What to call next, for a run in this state. */
 function hints(snapshot: FlowDebugSnapshot): string[] {
-  const ctx = snapshot.rootContextId;
+  const ctx = clean(snapshot.rootContextId);
   if (snapshot.state === "PAUSED") {
     return [`Next: debug_flow_step (over, into, out, resume or skip_all) or debug_flow_inspect on ${ctx}. End it with debug_flow_cancel.`];
   }
@@ -198,8 +198,8 @@ function sessionLines(session: FlowDebugSession, full: boolean, requested?: numb
 }
 
 function cancelLine(result: FlowDebugCancelResult): string {
-  if (result.alreadyEnded) return `Run ${result.contextId} had already ended (${clean(result.after)}); nothing was sent.`;
-  return `Run ${result.contextId} ${result.cancelled ? "cancelled" : `ended as ${clean(result.after)}`} (was ${clean(result.before)}).`;
+  if (result.alreadyEnded) return `Run ${clean(result.contextId)} had already ended (${clean(result.after)}); nothing was sent.`;
+  return `Run ${clean(result.contextId)} ${result.cancelled ? "cancelled" : `ended as ${clean(result.after)}`} (was ${clean(result.before)}).`;
 }
 
 /**
@@ -296,7 +296,7 @@ export function registerDebugFlowRunToTool(server: McpServer): void {
         timeout_seconds: z
           .number()
           .int()
-          .min(3)
+          .min(10)
           .max(300)
           .optional()
           .describe(
@@ -399,7 +399,7 @@ export function registerDebugFlowInspectTool(server: McpServer): void {
         instance: instanceParam,
         context_id: contextParam,
         view: z.enum(["snapshot", "steps", "locations", "breakpoints"]).optional().describe("Default snapshot."),
-        step: z.number().int().min(1).optional().describe("steps view: only this step's inputs and outputs."),
+        step: z.number().int().min(1).optional().describe("With view steps only: just this step's inputs and outputs."),
         full: fullParam,
       },
     },
@@ -471,6 +471,7 @@ export function registerDebugFlowBreakpointsTool(server: McpServer): void {
           const dbg = new FlowDebugger(sn);
           if (set) return dbg.setBreakpoints(context_id, set);
           if (!clear) {
+            // Read, merge, write, as nex does (two concurrent changes can overwrite each other). Nothing left means clear.
             const refs = mergeBreakpoints(await dbg.getBreakpoints(context_id), add ?? [], remove ?? []);
             if (refs.length) return dbg.setBreakpoints(context_id, refs);
           }

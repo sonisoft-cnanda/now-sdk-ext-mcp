@@ -69,9 +69,16 @@ interface ToolResult {
 }
 
 function refusalResult(toolName: string, verbs: readonly Verb[], layer: string): ToolResult {
-    const what = verbs.includes("execute")
-        ? "run scripts, flows or tests"
-        : "change instance data";
+    // Name what is actually refused: a tool needing write and execute under a write-only denial is refused for
+    // changing data, not for running scripts. Per-verb checks use the same ladder as the combined one, so at least
+    // one verb is refused here; if none were, the wording falls back to "change instance data".
+    const refused = verbs.filter((verb) => !checkRequirement({ target: "instance", verbs: [verb] }).allowed);
+    const what =
+        refused.includes("execute") && refused.includes("write")
+            ? "change instance data or run scripts, flows or tests"
+            : refused.includes("execute")
+              ? "run scripts, flows or tests"
+              : "change instance data";
     return {
         content: [
             {

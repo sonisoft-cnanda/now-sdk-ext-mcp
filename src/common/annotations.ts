@@ -89,6 +89,21 @@ const ARBITRARY: ToolAnnotations = {
 
 /** Writes to the LOCAL filesystem. Read-only with respect to the instance. */
 const LOCAL_WRITE: ToolAnnotations = { ...OVERWRITE, target: "local" };
+/**
+ * Hands out a browser session with the user's full rights in the UI. Minting it changes no instance data, but
+ * whatever drives the browser can then change anything, outside this server's policy. So it needs everything a
+ * change would: write and execute, and NEX_POLICY_DENY of either refuses it. Marked destructive, as ARBITRARY is,
+ * because what it enables is unbounded. Adds a new file; repeating adds another.
+ */
+const BROWSER_SESSION: ToolAnnotations = {
+    verbs: ["write", "execute"],
+    target: "instance",
+    readOnlyHint: false,
+    // What it hands out is unbounded, as with ARBITRARY: a host must not auto-approve it.
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: true,
+};
 
 export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // ---- meta: reports this server's own configuration, touches no instance.
@@ -175,6 +190,10 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // Resumes a paused execution, which then runs whatever the flow author wrote next; sent from a
     // background script, so it needs execute as well as write.
     send_flow_message: ARBITRARY,
+
+    // ---- browser sessions for Playwright. Deleting the file is local cleanup and stays permitted.
+    create_browser_session: BROWSER_SESSION,
+    delete_browser_session: LOCAL_WRITE,
 
     // ---- flow debugger. A debug run executes the flow's draft for real, so starting and stepping run
     // author logic (execute+write). Breakpoints and cancel need only write, so a run stays cancellable

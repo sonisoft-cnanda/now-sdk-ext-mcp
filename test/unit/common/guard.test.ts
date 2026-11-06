@@ -146,6 +146,21 @@ describe("guardServer", () => {
         expect(text).toContain("nothing was changed");
     });
 
+    it("names the verb actually refused for a tool needing write and execute", async () => {
+        const refusalFor = async (denied: ("write" | "execute")[]) => {
+            resetPolicyForTests();
+            installPolicy([denyLayer("test-deny", denied), grantLayer("default", ["write", "execute"])]);
+            const server = fakeServer();
+            const guarded = guardServer(server as never);
+            (guarded as unknown as ReturnType<typeof fakeServer>).registerTool("execute_script", {}, async () => ({ content: [] }));
+            const result = (await server.handlers.get("execute_script")!()) as { content: { text: string }[] };
+            return result.content[0].text;
+        };
+        expect(await refusalFor(["write"])).toContain("not permitted to change instance data.");
+        expect(await refusalFor(["execute"])).toContain("not permitted to run scripts, flows or tests.");
+        expect(await refusalFor(["write", "execute"])).toContain("not permitted to change instance data or run scripts, flows or tests.");
+    });
+
     it("lets read tools through even when everything is denied", async () => {
         installPolicy([denyLayer("test-deny", ["write", "execute"])]);
         const server = fakeServer();
