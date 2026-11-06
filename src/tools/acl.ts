@@ -268,13 +268,14 @@ export function registerListAclsTool(server: McpServer): void {
     },
     async ({ instance, table, name, scope, scope_id, operation, type, active, elevate }) => {
       try {
+        const scopeFilter = scope || scope_id ? { scope: scopeRef(scope, scope_id, false) } : {};
         const acls = await withConnectionRetry(
           instance,
           (sn) =>
             new AclManager(sn).list({
               ...(table !== undefined ? { table } : {}),
               ...(name !== undefined ? { name } : {}),
-              ...(scope || scope_id ? { scope: scopeRef(scope, scope_id, false) } : {}),
+              ...scopeFilter,
               ...(operation !== undefined ? { operation } : {}),
               ...(type !== undefined ? { type } : {}),
               ...(active !== undefined ? { active } : {}),
@@ -401,11 +402,13 @@ export function registerCreateAclTool(server: McpServer): void {
     },
     async (args) => {
       try {
+        // Built before connecting: malformed input never opens an elevated session.
+        const where = target(args);
         const result = await withConnectionRetry(
           args.instance,
           (sn) =>
             new AclManager(sn).create({
-              ...target(args),
+              ...where,
               operation: args.operation,
               ...(args.type !== undefined ? { type: args.type } : {}),
               ...(args.table !== undefined ? { table: args.table } : {}),
@@ -452,11 +455,13 @@ export function registerUpdateAclTool(server: McpServer): void {
     },
     async (args) => {
       try {
+        // Built before connecting: malformed input never opens an elevated session.
+        const where = target(args);
         const result = await withConnectionRetry(
           args.instance,
           (sn) =>
             new AclManager(sn).update(args.sys_id, {
-              ...target(args),
+              ...where,
               ...(args.operation !== undefined ? { operation: args.operation } : {}),
               ...(args.active !== undefined ? { active: args.active } : {}),
               ...(args.condition !== undefined ? { condition: args.condition } : {}),
@@ -494,9 +499,11 @@ export function registerDeleteAclTool(server: McpServer): void {
     },
     async (args) => {
       try {
+        // Built before connecting: malformed input never opens an elevated session.
+        const where = target(args);
         const result = await withConnectionRetry(
           args.instance,
-          (sn) => new AclManager(sn).delete(args.sys_id, { ...target(args), confirm: args.confirm }),
+          (sn) => new AclManager(sn).delete(args.sys_id, { ...where, confirm: args.confirm }),
           ELEVATED_WRITE
         );
         return resultText("ACL deleted.", result);
@@ -526,9 +533,11 @@ export function registerAddAclRoleTool(server: McpServer): void {
     },
     async (args) => {
       try {
+        // Built before connecting: malformed input never opens an elevated session.
+        const where = target(args);
         const result = await withConnectionRetry(
           args.instance,
-          (sn) => new AclManager(sn).addRole(args.sys_id, args.role, target(args)),
+          (sn) => new AclManager(sn).addRole(args.sys_id, args.role, where),
           ELEVATED_WRITE
         );
         return resultText(`Role ${clean(args.role)} added.`, result);
@@ -559,9 +568,11 @@ export function registerRemoveAclRoleTool(server: McpServer): void {
     },
     async (args) => {
       try {
+        // Built before connecting: malformed input never opens an elevated session.
+        const where = target(args);
         const result = await withConnectionRetry(
           args.instance,
-          (sn) => new AclManager(sn).removeRole(args.sys_id, args.role, target(args)),
+          (sn) => new AclManager(sn).removeRole(args.sys_id, args.role, where),
           ELEVATED_WRITE
         );
         return resultText(`Role ${clean(args.role)} removed.`, result);

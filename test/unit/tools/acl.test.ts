@@ -189,6 +189,13 @@ describe('writes', () => {
     expect(text).not.toContain('secret-abc')
   })
 
+  it('refuses malformed input before opening any connection', async () => {
+    await call('create_acl', { operation: 'read', table: 't', update_set: SET })
+    await call('add_acl_role', { sys_id: ACL, role: 'itil', scope: 'x_app', scope_id: 'b'.repeat(32), update_set: SET })
+    await call('list_acls', { scope: 'x_app', scope_id: 'b'.repeat(32) })
+    expect(mockWithConnectionRetry).not.toHaveBeenCalled()
+  })
+
   it('needs the ACL\'s application, one way only, and an update set', async () => {
     let r = await call('create_acl', { operation: 'read', table: 't', update_set: SET })
     expect(r.isError).toBe(true)

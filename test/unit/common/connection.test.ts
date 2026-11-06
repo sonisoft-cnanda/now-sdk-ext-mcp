@@ -29,7 +29,7 @@ jest.unstable_mockModule('@sonisoft/now-sdk-ext-core', () => ({
 // Dynamic imports after mocks are set up (required for ESM)
 const { getCredentials } = await import('@servicenow/sdk-cli/dist/auth/index.js')
 const { ServiceNowInstance } = await import('@sonisoft/now-sdk-ext-core')
-const { getServiceNowInstance, withConnectionRetry } = await import('../../../src/common/connection.js')
+const { getServiceNowInstance, withConnectionRetry, clearInstance } = await import('../../../src/common/connection.js')
 
 const mockGetCredentials = getCredentials as jest.MockedFunction<typeof getCredentials>
 
@@ -246,6 +246,23 @@ describe('getServiceNowInstance', () => {
     expect(operation).toHaveBeenCalledTimes(1)
     // The failed connection is dropped: the next call builds a fresh one.
     expect(await getServiceNowInstance('no-retry', { elevatedRoles: ['security_admin'] })).not.toBe(first)
+  })
+
+  it('keeps a connection a concurrent caller already replaced when a no-retry operation fails', async () => {
+    mockGetCredentials.mockResolvedValue({
+      type: 'basic', username: 'fixture-user', password: 'fabricated', instanceUrl: 'https://fixture.invalid',
+    })
+    const options = { elevatedRoles: ['security_admin'], retry: false }
+    let replacement: unknown
+    const error = Object.assign(new Error('ECONNRESET'), { code: 'ECONNRESET' })
+    const operation = jest.fn<(instance: InstanceType<typeof ServiceNowInstance>) => Promise<string>>().mockImplementation(async () => {
+      // Another caller's failure evicted this connection and a third built a fresh one, before this one fails.
+      clearInstance('concurrent', options)
+      replacement = await getServiceNowInstance('concurrent', options)
+      throw error
+    })
+    await expect(withConnectionRetry('concurrent', operation, options)).rejects.toBe(error)
+    expect(await getServiceNowInstance('concurrent', options)).toBe(replacement)
   })
 
   it('retries an elevated operation on a fresh elevated instance, leaving the plain one cached', async () => {
