@@ -144,17 +144,25 @@ export function registerCreateBrowserSessionTool(server: McpServer): void {
         // A taken name is refused before logging in, so no UI session is opened for nothing. O_EXCL stays the real guard.
         if (await lstat(join(directory, `${fileName}.json`)).then(() => true, () => false)) throw new SessionFileError("session_exists");
         const session = await createBrowserSession({ alias });
-        const path = await writeSessionFile(directory, fileName, JSON.stringify(session.storageState));
+        // Everything said about the session is worked out before the file exists, so nothing after the write can fail
+        // and report "nothing was written" over a file that was.
         const cookies = session.storageState.cookies.length;
+        const expiresMs = typeof session.oauthExpiresAt === "number" && Number.isFinite(session.oauthExpiresAt)
+          ? (session.oauthExpiresAt < 1e12 ? session.oauthExpiresAt * 1000 : session.oauthExpiresAt) // The SDK keeps seconds.
+          : undefined;
+        const expiry = expiresMs !== undefined && Number.isFinite(new Date(expiresMs).getTime())
+          ? [`The OAuth token behind it expires ${new Date(expiresMs).toISOString()}.`]
+          : [];
+        const who = clean(alias);
+        const where = clean(session.instanceUrl);
+        const content = JSON.stringify(session.storageState);
+        const path = await writeSessionFile(directory, fileName, content);
         return text([
-          `Browser session for ${clean(alias)} (${clean(session.instanceUrl)}) written to ${path} (mode 0600, ${cookies} cookie(s)).`,
+          `Browser session for ${who} (${where}) written to ${path} (mode 0600, ${cookies} cookie(s)).`,
           `Use it as Playwright storage state: browser.newContext({ storageState: "${path}" }), or test.use({ storageState: "${path}" }).`,
-          `It carries the full rights of ${clean(alias)}'s user in the UI. Never print, read out or commit it; delete it with ` +
+          `It carries the full rights of ${who}'s user in the UI. Never print, read out or commit it; delete it with ` +
             "delete_browser_session when the browser work is done.",
-          // The SDK keeps expires_at in seconds.
-          ...(session.oauthExpiresAt
-            ? [`The OAuth token behind it expires ${new Date(session.oauthExpiresAt < 1e12 ? session.oauthExpiresAt * 1000 : session.oauthExpiresAt).toISOString()}.`]
-            : []),
+          ...expiry,
           "The UI session ends at the instance's idle timeout; mint a new one then.",
         ]);
       } catch (error) {
@@ -216,6 +224,7 @@ export function registerDeleteBrowserSessionTool(server: McpServer): void {
         } finally {
           await handle.close();
         }
+        // By path after the handle checks: the directory is this user's own and 0700, so only this user could swap it.
         await unlink(target);
         return text([`Deleted the browser session file ${target}.`]);
       } catch (error) {
