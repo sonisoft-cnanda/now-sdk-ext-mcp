@@ -20,6 +20,8 @@ const SYS_ID = /^[0-9a-f]{32}$/;
 const SCOPE = /^[a-z0-9_]{1,80}$/;
 // Core puts the message and payload into a single-quoted script literal: a line break there is a syntax error.
 const SCRIPT_SAFE = /^[^\p{Cc}\u2028\u2029]*$/u;
+// Core's messages for a background script that was never run.
+const PRE_SEND = /not permitted in this session|Failed to obtain CSRF token|answered "not authorized" and did not run the script/;
 
 function failure(lines: string[]) {
   return { ...text(lines), isError: true };
@@ -64,8 +66,9 @@ export function registerGetFlowDefinitionTool(server: McpServer): void {
           ]);
         }
         if (view === "full") {
-          // Compact: a subflow's full definition is ~90k characters pretty-printed.
-          return text([dataBlock(JSON.stringify(result), "Flow definition", "view summary")]);
+          // The definition itself, without the result's bookkeeping. Compact: a subflow's is ~90k characters pretty-printed.
+          const { success: _success, errorMessage: _error, failureReason: _reason, errorCode: _code, ...definition } = result as unknown as Record<string, unknown>;
+          return text([dataBlock(JSON.stringify(definition), "Flow definition", "view summary")]);
         }
         return text([
           dataBlock(JSON.stringify({ sysId: result.sysId, type: result.artifactType, summary: result.summary }, null, 2), "Flow definition", "one artifact at a time"),
@@ -127,9 +130,10 @@ export function registerSendFlowMessageTool(server: McpServer): void {
         }
         const reason = cleanMessage(result.errorMessage ?? "");
         // Core catches every failure of the script call and returns it with rawScriptResult null: some happen before
-        // anything is sent (policy, CSRF token, scope, authorisation), others part way. The script's own report (a
-        // parsed envelope) is the platform refusing the message.
-        if (result.rawScriptResult === null && /not permitted|not authorized|CSRF|scope/i.test(result.errorMessage ?? "")) {
+        // anything is sent, others part way. Only core's own pre-send messages count as "nothing was sent" (a policy
+        // refusal, no CSRF token, the instance refusing to run the script); anything else may have been delivered, so
+        // the message is not sent twice. The script's own report (a parsed envelope) is the platform refusing it.
+        if (result.rawScriptResult === null && PRE_SEND.test(result.errorMessage ?? "")) {
           return failure([`Error (send_flow_message): ${reason}`, "Nothing was sent."]);
         }
         return failure(

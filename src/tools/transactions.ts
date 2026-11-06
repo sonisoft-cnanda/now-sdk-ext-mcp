@@ -23,7 +23,9 @@ function failure(lines: string[]) {
  * stay, so the request is still recognisable.
  */
 export function urlWithoutValues(url: string): string {
-  return url.replace(/#.*$/s, "").replace(/([?&;][^=&#;]*)=[^&#;]*/g, "$1=…");
+  // A value stops at the next separator, including "?": that only ever masks more (a value holding "?x=1" is masked
+  // as two).
+  return url.replace(/#.*$/s, "").replace(/([?&;][^=&#;?]*)=[^&#;?]*/g, "$1=…");
 }
 
 /** Messages core throws before the kill request is sent. */

@@ -3272,7 +3272,7 @@ Groups returned: 4
 
 ## list_transactions
 
-List the transactions running now on every responding cluster node (Active Transactions, All Nodes): user, age, type, state, query count and URL. URLs are shown without query values or fragment (other users' requests can carry tokens there), and the rows are fenced as data and cut at 80,000 characters. The nodes are asked to report and then polled, so this can take a few seconds; polling stops if the client cancels.
+List the transactions running now on every responding cluster node (Active Transactions, All Nodes): user, age, type, state, query count and URL. URLs are shown without query or matrix (`;`) values or fragment (other users' requests can carry tokens there); the path itself is kept, so a secret placed in a path segment would still show. The rows are fenced as data and cut at 80,000 characters. The nodes are asked to report and then polled, so this can take a few seconds; polling stops if the client cancels.
 
 ### Parameters
 

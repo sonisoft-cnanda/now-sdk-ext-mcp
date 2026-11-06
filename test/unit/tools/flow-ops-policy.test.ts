@@ -111,11 +111,20 @@ describe('send_flow_message', () => {
     fm.sendFlowMessage.mockResolvedValueOnce({ success: false, contextId: C, errorMessage: 'Could not parse send message result from script output.', rawScriptResult: {} })
     expect((await call('send_flow_message', { context_id: C, message: 'go' })).text).toContain('may have been delivered')
     // Core catches a policy refusal (and other failures before sending) and returns it with no script result.
+    for (const errorMessage of [
+      'Script execution error: Running scripts or flows is not permitted in this session (NEX_POLICY_DENY).',
+      'Script execution error: Failed to obtain CSRF token from the ServiceNow instance. Check the session.',
+      `Script execution error: The instance answered "not authorized" and did not run the script (scope 'global').`,
+    ]) {
+      fm.sendFlowMessage.mockResolvedValueOnce({ success: false, contextId: C, rawScriptResult: null, errorMessage })
+      const before = await call('send_flow_message', { context_id: C, message: 'go' })
+      expect(before.text).toContain('Nothing was sent.')
+      expect(before.text).not.toContain('may have been delivered')
+    }
+    // Anything else, even mentioning a scope, may have been delivered: never invite a second send.
     fm.sendFlowMessage.mockResolvedValueOnce({ success: false, contextId: C, rawScriptResult: null,
-      errorMessage: 'Script execution error: Running scripts or flows is not permitted in this session' })
-    const policy = await call('send_flow_message', { context_id: C, message: 'go' })
-    expect(policy.text).toContain('Nothing was sent.')
-    expect(policy.text).not.toContain('may have been delivered')
+      errorMessage: 'Script execution error: Script Execution Request resulted in 500 (scope x_app)' })
+    expect((await call('send_flow_message', { context_id: C, message: 'go' })).text).toContain('may have been delivered')
   })
 })
 
@@ -160,5 +169,18 @@ describe('get_policy_status', () => {
     expect(text).toContain('- execute: REFUSED (decided by NEX_POLICY_DENY)')
     expect(text).toContain('NEX_POLICY_DENY was set when the server started')
     expect(text.indexOf('- NEX_POLICY_DENY')).toBeLessThan(text.indexOf('- default (changes permitted)'))
+  })
+})
+
+describe('urlWithoutValues', () => {
+  it.each([
+    ['/api/now/table/incident', '/api/now/table/incident'],
+    ['/nav_to.do?uri=x&sysparm_ck=abc', '/nav_to.do?uri=…&sysparm_ck=…'],
+    ['/page.do;jsessionid=ABC?x=1', '/page.do;jsessionid=…?x=…'],
+    ['/a.do?k=1&k=2#token=zz', '/a.do?k=…&k=…'],
+    ['/a.do?flag&b=2', '/a.do?flag&b=…'],
+    ['/nav_to.do?uri=/x.do?y=secret', '/nav_to.do?uri=…?y=…'],
+  ])('%s -> %s', (url, expected) => {
+    expect(txTools.urlWithoutValues(url)).toBe(expected)
   })
 })
