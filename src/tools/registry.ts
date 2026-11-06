@@ -29,6 +29,12 @@ import {
   registerUpdateAclTool,
 } from "../tools/acl.js";
 import {
+  registerCompleteUpdateSetTool,
+  registerExportUpdateSetTool,
+  registerMoveUpdateSetCaptureTool,
+  registerRestoreUpdateSetTool,
+} from "../tools/working-set.js";
+import {
   registerAggregateGroupedTool,
   registerAggregateQueryTool,
   registerCountRecordsTool,
@@ -288,6 +294,10 @@ export const TOOL_REGISTRY: Record<string, ToolRegistrar> = {
   // ---- updateset
   clone_update_set: registerCloneUpdateSetTool,
   create_update_set: registerCreateUpdateSetTool,
+  complete_update_set: registerCompleteUpdateSetTool,
+  export_update_set: registerExportUpdateSetTool,
+  move_update_set_capture: registerMoveUpdateSetCaptureTool,
+  restore_update_set: registerRestoreUpdateSetTool,
   get_current_update_set: registerGetCurrentUpdateSetTool,
   inspect_update_set: registerInspectUpdateSetTool,
   list_update_sets: registerListUpdateSetsTool,

@@ -252,8 +252,18 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     get_current_update_set: READ,
     list_update_sets: READ,
     inspect_update_set: READ,
-    create_update_set: CREATE,
-    set_current_update_set: SET,
+    // Creating a set and switching the working set run a background script (the preferences are
+    // saved server-side), so both need execute as well as write.
+    create_update_set: { ...CREATE, verbs: ["execute", "write"] },
+    set_current_update_set: { ...SET, verbs: ["execute", "write"] },
+    restore_update_set: { ...SET, verbs: ["execute", "write"] },
+    // A state transition, checked and read back; a second call is refused (update_set_closed).
+    complete_update_set: { ...SET, idempotentHint: false },
+    // Moves one capture between sets; a second call is refused (capture_not_in_source).
+    move_update_set_capture: { ...OVERWRITE_ONCE, destructiveHint: false },
+    // Copies the set into a temporary Retrieved Update Set (background script, then deleted) and
+    // writes a local file; replace can overwrite that file.
+    export_update_set: { verbs: ["execute", "write"], target: "instance", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     clone_update_set: CREATE,
     // Relocates customisations out of one update set into another.
     move_update_set_records: OVERWRITE,

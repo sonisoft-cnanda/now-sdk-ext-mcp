@@ -88,10 +88,14 @@ All tools at a glance:
 | `get_current_update_set` | Get the active update set for the session |
 | `list_update_sets` | List update sets with filtering |
 | `create_update_set` | Create a new update set |
-| `set_current_update_set` | Set the active update set |
+| `set_current_update_set` | Make a set the user's working set (read back; reports the previous one) |
+| `restore_update_set` | Put back the previous working set |
+| `complete_update_set` | Complete a set after checking its capture count |
+| `move_update_set_capture` | Move one capture between sets of its application (verified) |
+| `export_update_set` | Export a set to an XML file (never returned to the model) |
 | `inspect_update_set` | Inspect update set contents grouped by type |
-| `clone_update_set` | Clone an update set and its records |
-| `move_update_set_records` | Move records between update sets |
+| `clone_update_set` | Clone an update set (lossy: drops application, action, table; not for promotion) |
+| `move_update_set_records` | Move records between update sets (unverified; prefer `move_update_set_capture`) |
 | **Access Controls** | |
 | `list_acls` | List ACLs of a table, name or application, with their roles |
 | `get_acl` | Read one ACL: roles, condition, script |
@@ -388,9 +392,10 @@ ServiceNow applications run in scopes that control access and namespacing:
 Update sets track configuration changes for migration between instances:
 
 - All customizations are captured in the current update set
-- Use `create_update_set` → `set_current_update_set` before making changes
-- Use `inspect_update_set` to review what was captured
-- Use `clone_update_set` to create backups before deployment
+- Use `create_update_set` (with `application`) → `set_current_update_set` before making changes, and note the previous working set it reports
+- Use `inspect_update_set` to review what was captured, then `complete_update_set` with that count
+- Put the user's working set back with `restore_update_set`
+- Ship a Complete set with `export_update_set`; do not use `clone_update_set` for backups or promotion (it drops columns)
 
 ### Access Controls (ACLs)
 
@@ -925,7 +930,11 @@ query_update_records(table: "incident", query: "active=true^priority=5", data: {
 | `get_current_update_set` | `instance` | Get active update set |
 | `list_update_sets` | `query`, `limit` | List with filtering |
 | `create_update_set` | `name`, `description`, `application` | Create new |
-| `set_current_update_set` | `name`, `sys_id` | Set as active |
+| `set_current_update_set` | `sys_id` | Make it the working set; reports the previous one |
+| `restore_update_set` | `application`, `update_set` | Put the previous working set back |
+| `complete_update_set` | `sys_id`, `expected_captures` | Complete after checking the count |
+| `move_update_set_capture` | `capture`, `source_set`, `target_set`, `reason` | Verified single-capture move |
+| `export_update_set` | `sys_id`, `output`, `replace`, `include_incomplete` | XML file, mode 0600 |
 | `inspect_update_set` | `sys_id` | List components grouped by type |
 | `clone_update_set` | `source_sys_id`, `new_name` | Clone with all records |
 | `move_update_set_records` | `target_update_set_id`, `record_sys_ids` or `source_update_set` | Move records between sets |
