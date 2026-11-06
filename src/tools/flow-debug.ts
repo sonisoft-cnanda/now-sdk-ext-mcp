@@ -98,7 +98,8 @@ function where(location: FlowDebugLocation | undefined): string {
 
 function locationLines(locations: FlowDebugLocation[]): string[] {
   if (locations.length === 0) return ["No locations: the run has no steps the debugger can stop at."];
-  return ["Steps it can stop at:", ...locations.map((l) => `- ${where(l)} (line ${l.line})`)];
+  // where() already names the line for a location without a step number.
+  return ["Steps it can stop at:", ...locations.map((l) => `- ${where(l)}${l.step?.number === undefined ? "" : ` (line ${l.line})`}`)];
 }
 
 function breakpointLines(breakpoints: FlowDebugBreakpoint[]): string[] {
@@ -205,7 +206,7 @@ function cancelLine(result: FlowDebugCancelResult): string {
  * A failure as text. A FlowDebugError carries a code, a detail and a remediation; a run that started and could not be
  * set up again is named so it can be found. `moved` marks a call that may have moved the run before it failed.
  */
-function failure(action: string, error: unknown, moved: boolean) {
+function failure(action: string, error: unknown, moved: boolean, note?: string) {
   const lines: string[] = [];
   if (error instanceof FlowDebugError) {
     lines.push(`Error (${action}): flow debugger refused: ${error.code}`);
@@ -229,6 +230,7 @@ function failure(action: string, error: unknown, moved: boolean) {
     lines.push(`Error (${action}): ${cleanMessage(error instanceof Error ? error.message : String(error))}`);
     if (moved) lines.push("The run may have moved before this failed: check it with debug_flow_inspect, or list_flow_debug_sessions.");
   }
+  if (note) lines.push(note);
   return { ...text(lines), isError: true };
 }
 
@@ -336,10 +338,13 @@ export function registerDebugFlowRunToTool(server: McpServer): void {
         if (result.cancel) lines.push(cancelLine(result.cancel));
         return text(lines);
       } catch (error) {
-        const failed = failure("debug_flow_run_to", error, true);
         // runTo cancels the run when it fails after starting it (best effort).
-        if (!isPolicyRefusal(error)) failed.content[0].text += "\nrun_to cancels its run when it fails; confirm with list_flow_debug_sessions.";
-        return failed;
+        return failure(
+          "debug_flow_run_to",
+          error,
+          true,
+          isPolicyRefusal(error) ? undefined : "run_to cancels its run when it fails; confirm with list_flow_debug_sessions."
+        );
       }
     }
   );
@@ -441,8 +446,9 @@ export function registerDebugFlowBreakpointsTool(server: McpServer): void {
       description:
         "Change a debug run's breakpoints, by the step numbers Workflow Studio shows: replace them (set), add or remove " +
         "some, or clear them all. Each step is looked up in the debugger's own list of places it can stop; one it cannot " +
-        "stop at is refused with the valid steps. While the run is in a subflow, this applies to the subflow. To list " +
-        "them, use debug_flow_inspect with view breakpoints.",
+        "stop at is refused with the valid steps. remove matches by step number, so a breakpoint on an inner action step " +
+        "(which has none) is only removed by set or clear. While the run is in a subflow, this applies to the subflow. To " +
+        "list them, use debug_flow_inspect with view breakpoints.",
       inputSchema: {
         instance: instanceParam,
         context_id: contextParam,

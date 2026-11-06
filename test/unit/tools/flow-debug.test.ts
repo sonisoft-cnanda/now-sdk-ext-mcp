@@ -164,8 +164,9 @@ describe('debug_flow_inspect', () => {
     expect(full.text).toContain('__action_status__')
     expect(full.text).not.toContain('Update Record')
     expect((await call('debug_flow_inspect', { context_id: CTX, view: 'steps', step: 9 })).text).toContain('Step 9 has no data yet.')
-    dbg.locations.mockResolvedValue([loc(1, 'Create Record')])
-    expect((await call('debug_flow_inspect', { context_id: CTX, view: 'locations' })).text).toContain('- step 1 Create Record (line 10)')
+    dbg.locations.mockResolvedValue([loc(1, 'Create Record'), { line: 12, step: { label: 'Inner', kind: 'actionStep', uiUniqueIdentifier: 'u' } }, { line: 14 }])
+    const locations = (await call('debug_flow_inspect', { context_id: CTX, view: 'locations' })).text
+    expect(locations).toContain('- step 1 Create Record (line 10)\n- Inner (line 12)\n- line 14\n')
     dbg.getBreakpoints.mockResolvedValue([])
     expect((await call('debug_flow_inspect', { context_id: CTX, view: 'breakpoints' })).text).toContain('No breakpoints.')
   })
