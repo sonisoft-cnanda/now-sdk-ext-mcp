@@ -33,7 +33,7 @@ export interface ToolPackage {
     tools: string[];
 }
 
-/** Legacy workflows, read-only: find, read, outline, validate and plan the move to Flow Designer. */
+/** Legacy workflows: find, read, outline, validate and plan the move to Flow Designer. Only validate stores anything (its report). */
 const WORKFLOW_READ_TOOLS = [
     "list_workflows",
     "get_workflow",
@@ -165,7 +165,8 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
 
     admin: {
         description:
-            "Instance administration: users and groups, ACLs, plugins, health, logs, and " +
+            "Instance administration: users and groups, ACLs, plugins, health, logs, active " +
+            "transactions, and " +
             "scripting. Deliberately includes execute_script — an admin package " +
             "without it is not an admin package.",
         tools: [
@@ -185,6 +186,8 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "install_store_app",
             "update_store_app",
             "repair_store_app",
+            "list_transactions",
+            "kill_transaction",
             ...ACL_TOOLS,
             // Pending NEX-38.
             "find_user",
@@ -226,6 +229,8 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "get_flow_error",
             "get_flow_logs",
             "cancel_flow",
+            "get_flow_definition",
+            "send_flow_message",
             "create_workflow",
             ...WORKFLOW_READ_TOOLS,
             "install_from_app_repo",
@@ -256,6 +261,8 @@ export const TOOL_PACKAGES: Record<string, ToolPackage> = {
             "get_flow_error",
             "get_flow_execution_details",
             "get_flow_logs",
+            "get_flow_definition",
+            "send_flow_message",
             // Porting a legacy workflow to Flow Designer starts from reading and planning it.
             ...WORKFLOW_READ_TOOLS,
             "query_table",

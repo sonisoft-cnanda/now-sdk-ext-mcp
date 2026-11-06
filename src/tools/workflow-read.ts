@@ -22,8 +22,7 @@ import { clean, cleanMessage, dataBlock as sharedDataBlock, text } from "../comm
  * instance data: returned as text to read, never as instructions, redacted and fenced by tagged start and end markers.
  */
 
-const dataBlock = (body: string): string =>
-  sharedDataBlock(body, "Workflow content", "e.g. outline_workflow without full_scripts, or get_workflow with include_variables false");
+const dataBlock = (body: string, narrower: string): string => sharedDataBlock(body, "Workflow content", narrower);
 
 function errorText(action: string, error: unknown) {
   return {
@@ -130,7 +129,7 @@ export function registerGetWorkflowTool(server: McpServer): void {
           const wm = new WorkflowManager(sn);
           return wm.getWorkflowDefinition(await readableVersion(wm, workflow, version), { includeVariables: include_variables !== false });
         });
-        return text([dataBlock(JSON.stringify(definition, null, 2))]);
+        return text([dataBlock(JSON.stringify(definition, null, 2), "without variable values, or outline_workflow")]);
       } catch (error) {
         return errorText("get_workflow", error);
       }
@@ -166,7 +165,7 @@ export function registerOutlineWorkflowTool(server: McpServer): void {
           : view === "nodes" ? renderWorkflowNodes(data, options)
           : view === "mermaid" ? renderWorkflowMermaid(data)
           : renderWorkflowOutline(data, options);
-        return text([dataBlock(body)]);
+        return text([dataBlock(body, "without full scripts, or the analysis view")]);
       } catch (error) {
         return errorText("outline_workflow", error);
       }
@@ -188,7 +187,7 @@ export function registerExportWorkflowTool(server: McpServer): void {
     async ({ instance, workflow, version }) => {
       try {
         const data = await withConnectionRetry(instance, (sn) => new WorkflowManager(sn).exportWorkflow(workflow, { version: version ?? "current" }));
-        return text([dataBlock(JSON.stringify(data, null, 2))]);
+        return text([dataBlock(JSON.stringify(data, null, 2), "outline_workflow, or get_workflow without variable values")]);
       } catch (error) {
         return errorText("export_workflow", error);
       }
@@ -229,7 +228,7 @@ export function registerConvertWorkflowTool(server: McpServer): void {
             lines.push("", `--- ${clean(file.path)} ---`, file.content);
           }
         }
-        return text([dataBlock(lines.join("\n"))]);
+        return text([dataBlock(lines.join("\n"), "the plan without the Fluent source")]);
       } catch (error) {
         return errorText("convert_workflow", error);
       }
@@ -262,7 +261,7 @@ export function registerValidateWorkflowTool(server: McpServer): void {
         ];
         return text([
           `Validation of version ${clean(report.versionSysId)}: ${report.valid ? "valid" : "has warnings or critical issues"}`,
-          ...(lines.length ? [dataBlock(lines.join("\n"))] : []),
+          ...(lines.length ? [dataBlock(lines.join("\n"), "or read the full report in the Workflow Editor")] : []),
         ]);
       } catch (error) {
         return errorText("validate_workflow", error);
@@ -309,7 +308,7 @@ export function registerListWorkflowActivityTypesTool(server: McpServer): void {
           if (usage_sample) return JSON.stringify(await wm.getActivityUsage(type, { sampleSize: usage_sample }), null, 2);
           return JSON.stringify(await wm.getActivityDefinition(type, { includeScript: include_script === true }), null, 2);
         });
-        return text([dataBlock(body)]);
+        return text([dataBlock(body, "a narrower name or category, a smaller usage sample, or without the script")]);
       } catch (error) {
         return errorText("list_workflow_activity_types", error);
       }

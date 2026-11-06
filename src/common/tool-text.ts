@@ -19,7 +19,10 @@ export function stripMarkup(text: string): string {
 /** An instance value on one line: control characters replaced. */
 export const clean = (text: string | undefined): string => (text ?? "").replace(/\p{Cc}/gu, " ");
 
-/** A message from the instance or an error: markup stripped, secrets redacted, one line, bounded. */
+/**
+ * A message from the instance or an error: markup stripped, secrets redacted, one line, bounded. Markup is stripped
+ * before redaction, so a secret split by a tag (sec<b>ret</b>) is redacted whole.
+ */
 export const cleanMessage = (text: string): string => redactMessage(stripMarkup(text)).replace(/\p{Cc}/gu, " ").slice(0, 500);
 
 export function text(lines: string[]) {

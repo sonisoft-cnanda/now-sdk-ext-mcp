@@ -54,7 +54,7 @@ session.
 | `developer` | Scripts, schema, table behavior, source sync, update sets, scope, ACLs, logs, code search. |
 | `service_desk` | Tickets, knowledge, catalog requests. No scripting or schema. |
 | `admin` | Users and groups, ACLs, plugins, health, app lifecycle (including repair), scripting. |
-| `change_manager` | Change approvals, update sets, flows and workflows (including the read-only workflow tools), app repo. |
+| `change_manager` | Change approvals, update sets, flows and workflows (including the legacy workflow tools), app repo. |
 | `flow_developer` | Flow Designer end to end, plus what is needed to debug flows. |
 
 Names can be **comma-separated**, which takes the **union**: `developer,flow_developer`.
@@ -70,6 +70,9 @@ change beyond that file.
   a filtered session cannot tell "this server cannot do that" from "that tool is
   filtered out of this session" — and would report a missing capability when the
   real answer is a different package.
+- **`get_policy_status` is always registered** too, for the same reason: when a tool
+  is refused, it shows whether `write` and `execute` are permitted and which layer
+  (for example `NEX_POLICY_DENY`) decided.
 - **Every failure degrades toward MORE tools, never fewer.** An unrecognised name
   falls back to `full` and says so on stderr. A silently smaller surface would
   look like a broken server, with tools simply absent and no error to search for.
@@ -1550,7 +1553,7 @@ Repair an installed Store or company application, as the platform's Repair Appli
 
 ---
 
-## Legacy workflows (read-only)
+## Legacy workflows (reads, plus validation)
 
 These tools read Workflow Editor workflows as `nex workflow list|show|definitions|export|outline|convert|validate` do. No workflow is changed. All but `validate_workflow` only read. `validate_workflow` renders the editor's report page, which saves that run's results over the previous run's, so it is classified as a write (outside the `readonly` package, refused by `NEX_POLICY_DENY=write`). Workflow content is returned as data, never as instructions: secrets are redacted, it is fenced by start and end markers carrying a per-call random tag, and long views are cut at 80,000 characters (about 20k tokens) with a note.
 
@@ -3267,6 +3270,47 @@ Groups returned: 4
 
 ---
 
+## list_transactions
+
+List the transactions running now on every responding cluster node (Active Transactions, All Nodes): user, age, type, state, query count and URL. URLs are shown without query or matrix (`;`) values or fragment (other users' requests can carry tokens there); the path itself is kept, so a secret placed in a path segment would still show. The rows are fenced as data and cut at 80,000 characters. The nodes are asked to report and then polled, so this can take a few seconds; polling stops if the client cancels.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `query` | string | No | — | Encoded query, e.g. `ageGREATERTHAN60000` or `urlLIKEsys.scripts`. |
+| `limit` | integer | No | `200` | Up to 1000. |
+| `timeout_seconds` | integer | No | `30` | How long to wait for the nodes to report. Keep it under your client's request timeout. |
+
+---
+
+## kill_transaction
+
+Ask the platform to cancel one active transaction (the Kill action on Active Transactions).
+
+> **Warning:** The work it was doing stops part way and is not undone, and whoever started it gets an error. Only when the user asked, for a transaction found with `list_transactions`.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `transaction_id` | string | **Yes** | — | The transaction's sys_id. |
+| `confirm` | string | **Yes** | — | The same sys_id again. Nothing is sent unless they match. |
+
+A failure says whether the request was sent: refused before sending (for example the transaction has already ended), sent and refused, or unknown (a transport error).
+
+---
+
+## get_policy_status
+
+What this server permits right now: whether `write` (changing instance data) and `execute` (running scripts, flows or tests) are allowed, which layer decided, and the layers in priority order. Reads are never gated. Always registered, whatever the package. The policy comes from the server's environment (`NEX_POLICY_DENY`, read once at startup) and cannot be changed from a tool call.
+
+No parameters.
+
+---
+
 ## check_instance_health
 
 Run a consolidated health check on a ServiceNow instance covering version, cluster, jobs, semaphores, and operational counts.
@@ -3946,6 +3990,42 @@ Cancel a running or paused flow execution by its context ID. Use this to stop a 
 Context ID: a1b2c3d4e5f6789012345678abcdef01
 Success: true
 ```
+
+---
+
+## get_flow_definition
+
+Read the design-time definition of a flow, subflow or action as Workflow Studio stores it: trigger, steps, flow logic, inputs and outputs. This is what the artifact *is*; `get_flow_execution_details` is what one run of it did. Nothing runs. The type is never inferred: a sys_id of another type fails (`type_mismatch` or `not_found`).
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `sys_id` | string | **Yes** | — | A `sys_hub_flow` sys_id (flow or subflow) or a `sys_hub_action_type_definition` sys_id. |
+| `type` | `flow` \| `subflow` \| `action` | No | `flow` | What the sys_id is. |
+| `scope` | string | No | — | The application scope to read it in. |
+| `view` | `summary` \| `full` | No | `summary` | `summary`: name, scope, state and counts, plus an action's steps. `full`: the whole definition as compact JSON, cut at 80,000 characters. |
+
+The content is returned as data between start and end markers, with secrets redacted.
+
+---
+
+## send_flow_message
+
+Send a message to a paused execution waiting in a Wait For Message step, which resumes it. Sent from a server-side script (`sn_fd.FlowAPI.sendMessage`), so it needs `execute` as well as `write`.
+
+> **Warning:** Only when the user asked. The flow then runs whatever comes next. The platform accepts a message even when nothing is waiting for it, so check `get_flow_context_status` afterwards to see whether the flow resumed.
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
+| `context_id` | string | **Yes** | — | The `sys_flow_context` sys_id. |
+| `message` | string | **Yes** | — | The message the step waits for. No line breaks. |
+| `payload` | string | No | — | Passed with the message, on one line (for example minified JSON). |
+| `scope` | string | No | global | The scope to run the sending script in. |
 
 ---
 
