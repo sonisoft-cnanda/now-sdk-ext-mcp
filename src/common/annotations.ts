@@ -176,7 +176,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
     // background script, so it needs execute as well as write.
     send_flow_message: ARBITRARY,
 
-    // ---- cluster transactions. Listing asks the nodes to report (POSTs core declares read-only).
+    // ---- cluster transactions. Listing asks the nodes to report (a GET of loading_transactions.do,
+    // then status polls core declares read-only).
     list_transactions: READ,
     // Ends a running transaction part way; what it had not done is lost. Repeating settles.
     kill_transaction: OVERWRITE,

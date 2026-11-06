@@ -93,7 +93,9 @@ describe('send_flow_message', () => {
   it('refuses line breaks, which would break the sending script', async () => {
     expect((await call('send_flow_message', { context_id: C, message: 'a\nb' })).isError).toBe(true)
     expect((await call('send_flow_message', { context_id: C, message: 'ok', payload: '{\n"a":1}' })).isError).toBe(true)
-    expect((await call('send_flow_message', { context_id: C, message: 'ok', payload: 'a b' })).isError).toBe(true)
+    for (const payload of ['a\u2028b', 'a\rb', 'a\u0085b']) {
+      expect((await call('send_flow_message', { context_id: C, message: 'ok', payload })).isError).toBe(true)
+    }
     expect((await call('send_flow_message', { context_id: C, message: '   ' })).isError).toBe(true)
     expect(fm.sendFlowMessage).not.toHaveBeenCalled()
   })
@@ -106,22 +108,28 @@ describe('send_flow_message', () => {
     expect(refused.text).not.toContain('may have been delivered')
     fm.sendFlowMessage.mockResolvedValueOnce({ success: false, contextId: C, errorMessage: 'Script execution error: socket hang up', rawScriptResult: null })
     expect((await call('send_flow_message', { context_id: C, message: 'go' })).text).toContain('may have been delivered')
-    fm.sendFlowMessage.mockRejectedValueOnce(new PolicyRefusal('Running scripts or flows is not permitted'))
+    fm.sendFlowMessage.mockResolvedValueOnce({ success: false, contextId: C, errorMessage: 'Could not parse send message result from script output.', rawScriptResult: {} })
+    expect((await call('send_flow_message', { context_id: C, message: 'go' })).text).toContain('may have been delivered')
+    // Core catches a policy refusal (and other failures before sending) and returns it with no script result.
+    fm.sendFlowMessage.mockResolvedValueOnce({ success: false, contextId: C, rawScriptResult: null,
+      errorMessage: 'Script execution error: Running scripts or flows is not permitted in this session' })
     const policy = await call('send_flow_message', { context_id: C, message: 'go' })
-    expect(policy.text).toContain('refused by policy')
+    expect(policy.text).toContain('Nothing was sent.')
     expect(policy.text).not.toContain('may have been delivered')
   })
 })
 
 describe('transactions', () => {
-  it('lists with defaults and cleans each row', async () => {
-    ctm.getTransactions.mockResolvedValue([{ sys_id: T, node_id: 'node1', user: 'admin', age: '00:01:05', url: '/api/now/table/incident?x=<b>1</b>',
-      type: 'REST', foreground: 'true', thread: 't', state: 'running', query_count: '12' }])
+  it('lists with defaults, fenced, with query values removed from URLs', async () => {
+    ctm.getTransactions.mockResolvedValue([{ sys_id: T, node_id: 'node1', user: 'admin', age: '00:01:05',
+      url: '/oauth_token.do?access_token=abc123&client_secret=zzz;code=q#frag', type: 'REST', foreground: 'true', thread: 't', state: 'running', query_count: '12' }])
     const { text } = await call('list_transactions', {})
-    expect(ctm.getTransactions).toHaveBeenCalledWith({ limit: 200, timeoutMs: 60_000 })
-    expect(text).toContain(`- ${T} on node1: admin, age 00:01:05, REST, running, foreground, 12 queries: /api/now/table/incident?x=1`)
+    expect(ctm.getTransactions).toHaveBeenCalledWith(expect.objectContaining({ limit: 200, timeoutMs: 30_000, signal: expect.anything() }))
+    expect(text).toContain(`- ${T} on node1: admin, age 00:01:05, REST, running, foreground, 12 queries: /oauth_token.do?access_token=…&client_secret=…;code=…`)
+    for (const leaked of ['abc123', 'zzz', 'frag']) expect(text).not.toContain(leaked)
+    expect(text).toMatch(/^1 active transaction\(s\)\n\[data [0-9a-f]{12}\] Transactions below/)
     await call('list_transactions', { query: 'ageGREATERTHAN60000', limit: 5, timeout_seconds: 10 })
-    expect(ctm.getTransactions).toHaveBeenLastCalledWith({ query: 'ageGREATERTHAN60000', limit: 5, timeoutMs: 10_000 })
+    expect(ctm.getTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'ageGREATERTHAN60000', limit: 5, timeoutMs: 10_000 }))
     expect((await call('list_transactions', { query: 'javascript:gs.log(1)' })).isError).toBe(true)
   })
 
@@ -135,25 +143,22 @@ describe('transactions', () => {
     expect(mockWithConnectionRetry.mock.calls[0][2]).toEqual({ retry: false })
     ctm.killTransaction.mockResolvedValue({ accepted: false, sysId: T })
     expect((await call('kill_transaction', { transaction_id: T, confirm: T })).isError).toBe(true)
-    ctm.killTransaction.mockRejectedValue(new Error('socket hang up'))
+    ctm.killTransaction.mockRejectedValueOnce(new Error('socket hang up'))
     expect((await call('kill_transaction', { transaction_id: T, confirm: T })).text).toContain('may have been sent')
+    ctm.killTransaction.mockRejectedValueOnce(new Error('The Kill action is unavailable or was not authorized for the selected transaction'))
+    expect((await call('kill_transaction', { transaction_id: T, confirm: T })).text).toContain('Nothing was sent.')
+    ctm.killTransaction.mockRejectedValueOnce(new Error('ServiceNow did not accept the transaction kill request'))
+    expect((await call('kill_transaction', { transaction_id: T, confirm: T })).text).toContain('sent and refused')
   })
 })
 
 describe('get_policy_status', () => {
-  it('reports each verb, its deciding layer, and the layers in order', async () => {
-    const before = process.env.NEX_POLICY_DENY
-    process.env.NEX_POLICY_DENY = 'execute'
-    try {
-      const { text } = await call('get_policy_status', {})
-      expect(checkRequirement).toHaveBeenCalledWith({ target: 'instance', verbs: ['write'] })
-      expect(text).toContain('- write: permitted (decided by default (changes permitted))')
-      expect(text).toContain('- execute: REFUSED (decided by NEX_POLICY_DENY)')
-      expect(text).toContain('NEX_POLICY_DENY is set')
-      expect(text.indexOf('- NEX_POLICY_DENY')).toBeLessThan(text.indexOf('- default (changes permitted)'))
-    } finally {
-      if (before === undefined) delete process.env.NEX_POLICY_DENY
-      else process.env.NEX_POLICY_DENY = before
-    }
+  it('reports each verb, its deciding layer, and the layers in order, from the installed policy', async () => {
+    const { text } = await call('get_policy_status', {})
+    expect(checkRequirement).toHaveBeenCalledWith({ target: 'instance', verbs: ['write'] })
+    expect(text).toContain('- write: permitted (decided by default (changes permitted))')
+    expect(text).toContain('- execute: REFUSED (decided by NEX_POLICY_DENY)')
+    expect(text).toContain('NEX_POLICY_DENY was set when the server started')
+    expect(text.indexOf('- NEX_POLICY_DENY')).toBeLessThan(text.indexOf('- default (changes permitted)'))
   })
 })

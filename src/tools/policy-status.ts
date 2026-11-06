@@ -30,9 +30,10 @@ export function registerGetPolicyStatusTool(server: McpServer): void {
       }
       lines.push(
         "Reads are never gated.",
-        process.env[DENY_ENV]
-          ? `${DENY_ENV} is set in the server's environment.`
-          : `${DENY_ENV} is not set: changes are restricted only by the instance's own ACLs.`,
+        // From the installed policy, as read once at startup (core ignores a blank value), not the variable now.
+        currentLayers().some((layer) => layer.name.startsWith(DENY_ENV))
+          ? `${DENY_ENV} was set when the server started.`
+          : `${DENY_ENV} was not set when the server started: changes are restricted only by the instance's own ACLs.`,
         "",
         "Layers, highest priority first:",
         ...currentLayers().map((layer) => `- ${layer.name}`)

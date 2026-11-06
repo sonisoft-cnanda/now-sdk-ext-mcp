@@ -3272,7 +3272,7 @@ Groups returned: 4
 
 ## list_transactions
 
-List the transactions running now on every responding cluster node (Active Transactions, All Nodes): user, age, type, state, query count and URL. The nodes are asked to report and then polled, so this can take a few seconds.
+List the transactions running now on every responding cluster node (Active Transactions, All Nodes): user, age, type, state, query count and URL. URLs are shown without query values or fragment (other users' requests can carry tokens there), and the rows are fenced as data and cut at 80,000 characters. The nodes are asked to report and then polled, so this can take a few seconds; polling stops if the client cancels.
 
 ### Parameters
 
@@ -3281,7 +3281,7 @@ List the transactions running now on every responding cluster node (Active Trans
 | `instance` | string | No | `SN_AUTH_ALIAS` env var | The ServiceNow instance auth alias. |
 | `query` | string | No | — | Encoded query, e.g. `ageGREATERTHAN60000` or `urlLIKEsys.scripts`. |
 | `limit` | integer | No | `200` | Up to 1000. |
-| `timeout_seconds` | integer | No | `60` | How long to wait for the nodes to report. |
+| `timeout_seconds` | integer | No | `30` | How long to wait for the nodes to report. Keep it under your client's request timeout. |
 
 ---
 
@@ -3299,11 +3299,13 @@ Ask the platform to cancel one active transaction (the Kill action on Active Tra
 | `transaction_id` | string | **Yes** | — | The transaction's sys_id. |
 | `confirm` | string | **Yes** | — | The same sys_id again. Nothing is sent unless they match. |
 
+A failure says whether the request was sent: refused before sending (for example the transaction has already ended), sent and refused, or unknown (a transport error).
+
 ---
 
 ## get_policy_status
 
-What this server permits right now: whether `write` (changing instance data) and `execute` (running scripts, flows or tests) are allowed, which layer decided, and the layers in priority order. Reads are never gated. Always registered, whatever the package. The policy comes from the server's environment (`NEX_POLICY_DENY`) and cannot be changed from a tool call.
+What this server permits right now: whether `write` (changing instance data) and `execute` (running scripts, flows or tests) are allowed, which layer decided, and the layers in priority order. Reads are never gated. Always registered, whatever the package. The policy comes from the server's environment (`NEX_POLICY_DENY`, read once at startup) and cannot be changed from a tool call.
 
 No parameters.
 

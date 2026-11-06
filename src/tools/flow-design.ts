@@ -67,7 +67,9 @@ export function registerGetFlowDefinitionTool(server: McpServer): void {
           // Compact: a subflow's full definition is ~90k characters pretty-printed.
           return text([dataBlock(JSON.stringify(result), "Flow definition", "view summary")]);
         }
-        return text([dataBlock(JSON.stringify({ sysId: result.sysId, type: result.artifactType, summary: result.summary }, null, 2), "Flow definition", "view summary")]);
+        return text([
+          dataBlock(JSON.stringify({ sysId: result.sysId, type: result.artifactType, summary: result.summary }, null, 2), "Flow definition", "one artifact at a time"),
+        ]);
       } catch (error) {
         return failure([
           isPolicyRefusal(error)
@@ -93,7 +95,13 @@ export function registerSendFlowMessageTool(server: McpServer): void {
       inputSchema: {
         instance: instanceParam,
         context_id: z.string().regex(SYS_ID).describe("The execution's sys_flow_context sys_id."),
-        message: z.string().trim().min(1).max(200).regex(SCRIPT_SAFE, "no control characters or line breaks").describe("The message the Wait For Message step waits for."),
+        message: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .regex(SCRIPT_SAFE, "no control characters or line breaks")
+          .describe("The message the Wait For Message step waits for. Leading and trailing spaces are removed."),
         payload: z
           .string()
           .max(10_000)
@@ -118,7 +126,12 @@ export function registerSendFlowMessageTool(server: McpServer): void {
           ]);
         }
         const reason = cleanMessage(result.errorMessage ?? "");
-        // The script reports the platform's refusal itself; anything else means it may not have finished.
+        // Core catches every failure of the script call and returns it with rawScriptResult null: some happen before
+        // anything is sent (policy, CSRF token, scope, authorisation), others part way. The script's own report (a
+        // parsed envelope) is the platform refusing the message.
+        if (result.rawScriptResult === null && /not permitted|not authorized|CSRF|scope/i.test(result.errorMessage ?? "")) {
+          return failure([`Error (send_flow_message): ${reason}`, "Nothing was sent."]);
+        }
         return failure(
           result.rawScriptResult === null || /^Could not parse/.test(result.errorMessage ?? "")
             ? [
